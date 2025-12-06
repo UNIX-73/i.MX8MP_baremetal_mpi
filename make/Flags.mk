@@ -5,9 +5,13 @@ DEFINES     ?=
 
 MARCH       ?= armv8.2-a
 MCPU        ?= cortex-a76
+RS_TARGET	= aarch64-unknown-none
 
 ASM_FLAGS   = $(DEFINES)
-C_FLAGS     = $(OPT_LEVEL) $(DEFINES) -std=gnu23 -Wall -Wextra -Werror -ffreestanding -nostdlib -nostartfiles -I$(INCLUDE_DIR) -march=$(MARCH) -mcpu=$(MCPU)
-CPP_FLAGS   = $(C_FLAGS) -std=c++20 -fno-exceptions -fno-rtti
+C_FLAGS     = $(OPT_LEVEL) $(DEFINES) -std=gnu23 -Wall -Wextra -Werror -ffreestanding -nostdlib -nostdinc -nostartfiles -x c -I$(INCLUDE_DIR) -march=$(MARCH) -mcpu=$(MCPU)
 LD_FLAGS    = -T linker.ld -Map $(MAP)
 
+$(OBJ_DIR)/drivers/%.o: C_FLAGS += -DDRIVERS
+$(OBJ_DIR)/kernel/%.o: C_FLAGS += -DKERNEL
+$(OBJ_DIR)/lib/%.o: C_FLAGS += -DLIB
+$(OBJ_DIR)/boot/%.o: C_FLAGS += -DBOOT

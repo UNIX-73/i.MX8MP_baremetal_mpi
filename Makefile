@@ -13,23 +13,22 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.S
 
 
 # C files
-$(OBJ_DIR)/drivers/%.o: C_FLAGS += -DDRIVERS
-
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) -c $< -o $@
 
 
-# CPP files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
-	mkdir -p $(dir $@)
-	$(CPP) $(CPP_FLAGS) -c $< -o $@
+# Rust files TODO: Allow using debug build + gdb
+$(OBJ_DIR)/rslib.a: Cargo.toml _src/*.rs
+	$(RUST) build --release --target $(RS_TARGET)
+	mkdir -p $(OBJ_DIR)
+	cp $(RS_LIB_DIR) $(OBJ_DIR)/rslib.a
 
 
 # Link
-$(TARGET): $(OBJ)
+$(TARGET): $(OBJ) $(OBJ_DIR)/rslib.a
 	mkdir -p $(dir $@)
-	$(LD) $(LD_FLAGS) -o $@ $(OBJ)
+	$(LD) $(LD_FLAGS) -o $@ $(OBJ) $(OBJ_DIR)/rslib.a
 	make disasm
 	make full-disasm
 
@@ -51,7 +50,7 @@ uimage: $(BIN)
 	        -d $(BIN) $(UIMAGE)
 
 clean:
-	rm -f $(OBJ) $(DISASM) $(TARGET) $(BIN) $(MAP)
+	rm -rf $(OBJ_DIR)/* target
 
 
 disasm: $(OBJ)

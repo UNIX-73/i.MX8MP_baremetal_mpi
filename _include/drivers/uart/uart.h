@@ -8,6 +8,10 @@ typedef enum {
 	UART_ID_4,
 } UART_ID;
 
+void UART_reset(UART_ID id);
+
+void UART_init(UART_ID id);
+
 void UART_putc(UART_ID id, uint8 c);
 
-void UART_puts(UART_ID id, char *s);
+void UART_puts(UART_ID id, const char *s);

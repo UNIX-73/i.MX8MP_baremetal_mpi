@@ -6,6 +6,7 @@
 
 #include <lib/mmio/mmio_macros.h>
 
+#include "uart_map.h"
 
 // 17.2.14.2 - 7366
 

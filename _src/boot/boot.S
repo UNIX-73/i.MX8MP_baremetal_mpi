@@ -2,6 +2,7 @@
 .global _start
 
 _start:
+    nop
     // disable irq
     msr daifset, #0xf
 
@@ -14,7 +15,6 @@ _start:
     msr SP_EL1, x0
 
     // Clean bss
-/*
     ldr x1, =_bss_start
     ldr x2, =_bss_end
 1:
@@ -22,14 +22,8 @@ _start:
     b.eq 2f
     str xzr, [x1], #8
     b 1b
-2:
-*/
+2:  nop
 
-#ifdef OPENOCD
-    ldr x0, =1
-3:  nop
-    cbnz x0, 3b
-#endif
 
     bl kernel_entry
 

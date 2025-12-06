@@ -10,54 +10,60 @@ Linker script and memory map
 
                 0x0000000040000000                . = 0x40000000
 
-.text           0x0000000040000000      0x100
+.text           0x0000000040000000      0x900
  *(.text.boot)
- .text.boot     0x0000000040000000       0x30 bin/obj/boot/boot.o
+ .text.boot     0x0000000040000000       0x60 bin/obj/boot/boot.o
                 0x0000000040000000                _start
  *(.text*)
- .text          0x0000000040000030        0xc bin/obj/lib/kernel_utils.o
-                0x0000000040000030                _currentEL
- .text          0x000000004000003c        0x0 bin/obj/boot/boot.o
- .text          0x000000004000003c       0x64 bin/obj/kernel/kernel_entry.o
-                0x000000004000003c                kernel_entry
- .text          0x00000000400000a0       0x60 bin/obj/drivers/uart/uart.o
-                0x00000000400000c4                UART_putc
-                0x0000000040000100                . = ALIGN (0x10)
+ .text          0x0000000040000060        0xc bin/obj/lib/kernel_utils.o
+                0x0000000040000060                _currentEL
+ .text          0x000000004000006c        0x0 bin/obj/boot/boot.o
+ .text          0x000000004000006c       0x44 bin/obj/kernel/kernel_entry.o
+                0x000000004000006c                kernel_entry
+ .text          0x00000000400000b0      0x84c bin/obj/drivers/uart/uart.o
+                0x0000000040000634                UART_putc
+                0x000000004000069c                UART_puts
+                0x00000000400006ec                UART_reset
+                0x0000000040000784                UART_init
+                0x0000000040000900                . = ALIGN (0x10)
+ *fill*         0x00000000400008fc        0x4 
 
-.iplt           0x0000000040000100        0x0
- .iplt          0x0000000040000100        0x0 bin/obj/boot/boot.o
+.iplt           0x0000000040000900        0x0
+ .iplt          0x0000000040000900        0x0 bin/obj/boot/boot.o
 
-.rodata         0x0000000040000100       0x20
+.rodata         0x0000000040000900       0x30
  *(.rodata*)
- .rodata        0x0000000040000100       0x20 bin/obj/drivers/uart/uart.o
-                0x0000000040000120                . = ALIGN (0x10)
+ .rodata        0x0000000040000900        0xe bin/obj/kernel/kernel_entry.o
+ *fill*         0x000000004000090e        0x2 
+ .rodata        0x0000000040000910       0x20 bin/obj/drivers/uart/uart.o
+                0x0000000040000930                . = ALIGN (0x10)
 
-.rela.dyn       0x0000000040000120        0x0
- .rela.iplt     0x0000000040000120        0x0 bin/obj/boot/boot.o
+.rela.dyn       0x0000000040000930        0x0
+ .rela.iplt     0x0000000040000930        0x0 bin/obj/boot/boot.o
  .rela.text.boot
-                0x0000000040000120        0x0 bin/obj/boot/boot.o
+                0x0000000040000930        0x0 bin/obj/boot/boot.o
 
-.data           0x0000000040000120        0x0
+.data           0x0000000040000930        0x0
  *(.data*)
- .data          0x0000000040000120        0x0 bin/obj/lib/kernel_utils.o
- .data          0x0000000040000120        0x0 bin/obj/boot/boot.o
- .data          0x0000000040000120        0x0 bin/obj/kernel/kernel_entry.o
- .data          0x0000000040000120        0x0 bin/obj/drivers/uart/uart.o
-                0x0000000040000120                . = ALIGN (0x10)
+ .data          0x0000000040000930        0x0 bin/obj/lib/kernel_utils.o
+ .data          0x0000000040000930        0x0 bin/obj/boot/boot.o
+ .data          0x0000000040000930        0x0 bin/obj/kernel/kernel_entry.o
+ .data          0x0000000040000930        0x0 bin/obj/drivers/uart/uart.o
+                0x0000000040000930                . = ALIGN (0x10)
 
-.igot.plt       0x0000000040000120        0x0
- .igot.plt      0x0000000040000120        0x0 bin/obj/boot/boot.o
+.igot.plt       0x0000000040000930        0x0
+ .igot.plt      0x0000000040000930        0x0 bin/obj/boot/boot.o
 
-.bss            0x0000000040000120        0x0
-                0x0000000040000120                __bss_start = .
+.bss            0x0000000040000930        0x0
+                0x0000000040000930                __bss_start = .
  *(.bss*)
- .bss           0x0000000040000120        0x0 bin/obj/lib/kernel_utils.o
- .bss           0x0000000040000120        0x0 bin/obj/boot/boot.o
- .bss           0x0000000040000120        0x0 bin/obj/kernel/kernel_entry.o
- .bss           0x0000000040000120        0x0 bin/obj/drivers/uart/uart.o
+ .bss           0x0000000040000930        0x0 bin/obj/lib/kernel_utils.o
+ .bss           0x0000000040000930        0x0 bin/obj/boot/boot.o
+ .bss           0x0000000040000930        0x0 bin/obj/kernel/kernel_entry.o
+ .bss           0x0000000040000930        0x0 bin/obj/drivers/uart/uart.o
  *(COMMON)
-                0x0000000040000120                __bss_end = .
-                0x0000000040000120                . = ALIGN (0x10)
+                0x0000000040000930                __bss_end = .
+                0x0000000040000930                . = ALIGN (0x10)
 
 .stacks         0x0000000040001000   0xf00000
                 0x0000000040001000                __stack_el0_bottom = .
@@ -74,8 +80,8 @@ Linker script and memory map
                 0x0000000040f01000                . = (. + 0x500000)
  *fill*         0x0000000040a01000   0x500000 
                 0x0000000040f01000                __stack_el2_top = .
-                [!provide]                        PROVIDE (_bss_start = __bss_start)
-                [!provide]                        PROVIDE (_bss_end = __bss_end)
+                0x0000000040000930                PROVIDE (_bss_start = __bss_start)
+                0x0000000040000930                PROVIDE (_bss_end = __bss_end)
                 [!provide]                        PROVIDE (_stack_el0_top = __stack_el0_top)
                 [!provide]                        PROVIDE (_stack_el0_bottom = __stack_el0_bottom)
                 [!provide]                        PROVIDE (_stack_el1_top = __stack_el1_top)
@@ -86,10 +92,62 @@ LOAD bin/obj/lib/kernel_utils.o
 LOAD bin/obj/boot/boot.o
 LOAD bin/obj/kernel/kernel_entry.o
 LOAD bin/obj/drivers/uart/uart.o
+LOAD bin/obj/rslib.a
 OUTPUT(bin/kernel.elf elf64-littleaarch64)
 LOAD linker stubs
+
+.debug_line     0x0000000000000000      0x309
+ .debug_line    0x0000000000000000       0x4d bin/obj/lib/kernel_utils.o
+ .debug_line    0x000000000000004d       0x5a bin/obj/boot/boot.o
+ .debug_line    0x00000000000000a7       0x73 bin/obj/kernel/kernel_entry.o
+ .debug_line    0x000000000000011a      0x1ef bin/obj/drivers/uart/uart.o
+
+.debug_line_str
+                0x0000000000000000      0x197
+ .debug_line_str
+                0x0000000000000000      0x197 bin/obj/lib/kernel_utils.o
+                                         0x43 (size before relaxing)
+ .debug_line_str
+                0x0000000000000197       0x3c bin/obj/boot/boot.o
+ .debug_line_str
+                0x0000000000000197       0xdd bin/obj/kernel/kernel_entry.o
+ .debug_line_str
+                0x0000000000000197      0x171 bin/obj/drivers/uart/uart.o
+
+.debug_info     0x0000000000000000      0xcf0
+ .debug_info    0x0000000000000000       0x28 bin/obj/lib/kernel_utils.o
+ .debug_info    0x0000000000000028       0x28 bin/obj/boot/boot.o
+ .debug_info    0x0000000000000050      0x144 bin/obj/kernel/kernel_entry.o
+ .debug_info    0x0000000000000194      0xb5c bin/obj/drivers/uart/uart.o
+
+.debug_abbrev   0x0000000000000000      0x26e
+ .debug_abbrev  0x0000000000000000       0x14 bin/obj/lib/kernel_utils.o
+ .debug_abbrev  0x0000000000000014       0x14 bin/obj/boot/boot.o
+ .debug_abbrev  0x0000000000000028       0xcc bin/obj/kernel/kernel_entry.o
+ .debug_abbrev  0x00000000000000f4      0x17a bin/obj/drivers/uart/uart.o
+
+.debug_aranges  0x0000000000000000       0xc0
+ .debug_aranges
+                0x0000000000000000       0x30 bin/obj/lib/kernel_utils.o
+ .debug_aranges
+                0x0000000000000030       0x30 bin/obj/boot/boot.o
+ .debug_aranges
+                0x0000000000000060       0x30 bin/obj/kernel/kernel_entry.o
+ .debug_aranges
+                0x0000000000000090       0x30 bin/obj/drivers/uart/uart.o
+
+.debug_str      0x0000000000000000      0x5c6
+ .debug_str     0x0000000000000000      0x5c6 bin/obj/lib/kernel_utils.o
+                                         0x51 (size before relaxing)
+ .debug_str     0x00000000000005c6       0x4a bin/obj/boot/boot.o
+ .debug_str     0x00000000000005c6      0x172 bin/obj/kernel/kernel_entry.o
+ .debug_str     0x00000000000005c6      0x585 bin/obj/drivers/uart/uart.o
 
 .comment        0x0000000000000000       0x45
  .comment       0x0000000000000000       0x45 bin/obj/kernel/kernel_entry.o
                                          0x46 (size before relaxing)
  .comment       0x0000000000000045       0x46 bin/obj/drivers/uart/uart.o
+
+.debug_frame    0x0000000000000000      0x4c8
+ .debug_frame   0x0000000000000000       0x30 bin/obj/kernel/kernel_entry.o
+ .debug_frame   0x0000000000000030      0x498 bin/obj/drivers/uart/uart.o

@@ -16,11 +16,13 @@
 		return (RegValueStruct){.val = *((reg32_ptr)(addr))};                  \
 	}
 
-#define MMIO_DECLARE_REG32_GETTER_WITH_BASE(periph_name, reg_name,             \
-											RegValueStruct, offset)            \
-	static inline RegValueStruct periph_name##_##reg_name##_read(uintptr base) \
-	{                                                                          \
-		return (RegValueStruct){.val = *((reg32_ptr)(base + (offset)))};       \
+#define MMIO_DECLARE_REG32_GETTER_WITH_BASE(periph_name, reg_name,           \
+											RegValueStruct, offset)          \
+	static inline RegValueStruct periph_name##_##reg_name##_read(            \
+		uintptr periph_base)                                                 \
+	{                                                                        \
+		return (RegValueStruct){.val =                                       \
+									*((reg32_ptr)(periph_base + (offset)))}; \
 	}
 
 // Register setters
@@ -31,12 +33,12 @@
 		*((reg32_ptr)(addr)) = v.val;                                          \
 	}
 
-#define MMIO_DECLARE_REG32_SETTER_WITH_BASE(periph_name, reg_name,        \
-											RegValueStruct, offset)       \
-	static inline void periph_name##_##reg_name##_write(uintptr base,     \
-														RegValueStruct v) \
-	{                                                                     \
-		*((reg32_ptr)(base + (offset))) = v.val;                          \
+#define MMIO_DECLARE_REG32_SETTER_WITH_BASE(periph_name, reg_name,           \
+											RegValueStruct, offset)          \
+	static inline void periph_name##_##reg_name##_write(uintptr periph_base, \
+														RegValueStruct v)    \
+	{                                                                        \
+		*((reg32_ptr)(periph_base + (offset))) = v.val;                      \
 	}
 
 // Bit field getters
