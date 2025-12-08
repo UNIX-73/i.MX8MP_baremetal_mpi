@@ -64,7 +64,3 @@ fn rust_panic(info: &PanicInfo) -> ! {
     unsafe { panic() };
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rust_panic_test() -> ! {
-    panic!("Rust panic test");
-}

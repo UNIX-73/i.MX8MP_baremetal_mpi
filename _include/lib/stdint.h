@@ -6,6 +6,24 @@
 #define _STD_TYPES_T
 #endif
 
+typedef enum {
+	STDINT_INT8,
+	STDINT_UINT8,
+	STDINT_INT16,
+	STDINT_UINT16,
+	STDINT_INT32,
+	STDINT_UINT32,
+	STDINT_INT64,
+	STDINT_UINT64,
+} STDINT_TYPES;
+
+typedef enum {
+	STDINT_REPR_DEC = 10,
+	STDINT_REPR_HEX = 16,
+	STDINT_REPR_BIN = 2,
+	STDINT_REPR_OCT = 8,
+} STDINT_REPR;
+
 typedef signed char int8;
 typedef unsigned char uint8;
 
@@ -93,3 +111,17 @@ typedef unsigned long long uintptr;
 #define INTMAX_MIN INT64_MIN
 #define INTMAX_MAX INT64_MAX
 #define UINTMAX_MAX UINT64_MAX
+
+typedef union {
+	int8 int8;
+	uint8 uint8;
+
+	int16 int16;
+	uint16 uint16;
+
+	int32 int32;
+	uint32 uint32;
+
+	int64 int64;
+	uint64 uint64;
+} STDINT_UNION;

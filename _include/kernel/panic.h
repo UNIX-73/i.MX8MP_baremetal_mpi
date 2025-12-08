@@ -4,7 +4,7 @@
 
 #define PANIC(panic_message)         \
 	set_and_throw_panic((PanicInfo){ \
-		.message = #panic_message,   \
+		.message = panic_message,   \
 		.location =                  \
 			(PanicLocation){         \
 				.file = __FILE__,    \

@@ -1,11 +1,9 @@
 #include <drivers/uart/uart.h>
 #include <kernel/panic.h>
 #include <lib/kernel_utils.h>
+#include <lib/stdint.h>
 #include <lib/stdmacros.h>
-
-#include "lib/stdint.h"
-
-extern void rust_panic_test();
+#include <lib/string.h>
 
 void kernel_entry()
 {
@@ -15,10 +13,11 @@ void kernel_entry()
 
 	UART_puts(UART_ID_2, "Hello world\n\r");
 
-	// UART_reset(UART_ID_2);
+	int64 test_v = -0x0;
 
-	PANIC(Panic test from C !);
-	rust_panic_test();	// panic test
+	test_stdint_to_ascii(test_v, 67);
+
+	PANIC(":)");
 
 	UART_init(UART_ID_2);
 
