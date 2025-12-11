@@ -3,6 +3,8 @@
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 
+#include "drivers/uart/raw/uart_urxd.h"
+#include "drivers/uart/raw/uart_uts.h"
 
 static const uintptr UART_N_BASE[] = {
 	UART1_BASE,
@@ -40,7 +42,7 @@ void UART_reset(UART_ID id)
 	UartUcr2Value ucr2 = UART_UCR2_read(periph_base);
 	UART_UCR2_BF_set_SRST(&ucr2, false);  // UART software reset 17.2.8.2
 
-	FOREVER
+	loop
 	{
 		for (uint64 i = 0; i < 2000; i++) asm volatile("nop");
 
@@ -93,4 +95,15 @@ void UART_init(UART_ID id)
 
 	UartUmcrValue umcr = {0};
 	UART_UMCR_write(periph_base, umcr);
+}
+
+bool UART_read(UART_ID id, uint8 *data)
+{
+	uintptr periph_base = UART_N_BASE[id];
+	if (UART_UTS_BF_get_RXEMPTY(UART_UTS_read(periph_base))) return false;
+
+	UartUrxdValue urxd = UART_URXD_read(periph_base);
+	*data = UART_URDX_BF_get_RX_DATA(urxd);
+
+	return true;
 }

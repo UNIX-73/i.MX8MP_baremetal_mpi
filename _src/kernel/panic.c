@@ -7,86 +7,87 @@
 
 #define PANIC_UART_OUTPUT UART_ID_2
 
-#define PANIC_MESSAGE_INIT_VALUE 4096
-#define PANIC_FILE_INIT_VALUE 1024
+#define PANIC_MESSAGE_LEN_INIT_VALUE 4096
+#define PANIC_FILE_LEN_INIT_VALUE 1024
 
 // The global static scope variables and buffers allow rust to easily send the
 // message in a c format string with \0. It also allows to set the panic
 // information without throwing the panic.
 
-uint64 PANIC_MESSAGE_LEN;
-uint64 PANIC_FILE_LEN;
+uint64 PANIC_MESSAGE_BUF_SIZE;
+uint64 PANIC_FILE_BUF_SIZE;
 
-// TODO: If implementing multithreading the panic infos must be protected by a
+// NOTE: If implementing multithreading the panic infos must be protected by a
 // mutex
 
-uint8 *PANIC_MESSAGE_PTR;
-uint8 *PANIC_FILE_PTR;
+uint8 *PANIC_MESSAGE_BUF_PTR;
+uint8 *PANIC_FILE_BUF_PTR;
 uint32 PANIC_LINE;
 uint32 PANIC_COL;
 
-static uint8 panic_message_buffer[PANIC_MESSAGE_INIT_VALUE];
-static uint8 panic_file_buffer[PANIC_FILE_INIT_VALUE];
+_Alignas(16) static uint8 panic_message_buffer[PANIC_MESSAGE_LEN_INIT_VALUE];
+_Alignas(16) static uint8 panic_file_buffer[PANIC_FILE_LEN_INIT_VALUE];
 
 void init_panic()
 {
-	PANIC_MESSAGE_LEN = PANIC_MESSAGE_INIT_VALUE;
-	PANIC_FILE_LEN = PANIC_FILE_INIT_VALUE;
+	PANIC_MESSAGE_BUF_SIZE = sizeof(panic_message_buffer);
+	PANIC_FILE_BUF_SIZE = sizeof(panic_file_buffer);
 
-	PANIC_MESSAGE_PTR = panic_message_buffer;
-	PANIC_FILE_PTR = panic_file_buffer;
+	PANIC_MESSAGE_BUF_PTR = panic_message_buffer;
+	PANIC_FILE_BUF_PTR = panic_file_buffer;
 
 	PANIC_LINE = 0;
 	PANIC_COL = 0;
 
-	strcopy((char *)PANIC_MESSAGE_PTR,
+	strcopy((char *)PANIC_MESSAGE_BUF_PTR,
 			"Panic message not defined and not changed from init_panic() "
 			"initialization stage.",
-			PANIC_MESSAGE_INIT_VALUE);
+			PANIC_MESSAGE_LEN_INIT_VALUE);
 
-	strcopy((char *)PANIC_FILE_PTR, "Panic file not defined",
-			PANIC_FILE_INIT_VALUE);
+	strcopy((char *)PANIC_FILE_BUF_PTR, "Panic file not defined",
+			PANIC_FILE_LEN_INIT_VALUE);
 }
 
-void panic()
+_Noreturn void panic()
 {
 	char buf[200];
 
 	UART_puts(PANIC_UART_OUTPUT, "\n\r[PANIC!]\n\rPanic file:\t");
-	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_FILE_PTR);
+	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_FILE_BUF_PTR);
 	UART_puts(PANIC_UART_OUTPUT, " at line ");
 
 	UART_puts(PANIC_UART_OUTPUT,
 			  stdint_to_ascii((STDINT_UNION){.uint32 = PANIC_LINE},
-							  STDINT_UINT32, buf, 200, STDINT_REPR_DEC));
+							  STDINT_UINT32, buf, 200, STDINT_BASE_REPR_DEC));
 
 	if (PANIC_COL != 0) {
 		UART_puts(PANIC_UART_OUTPUT, ":");
-		UART_puts(PANIC_UART_OUTPUT,
-				  stdint_to_ascii((STDINT_UNION){.uint32 = PANIC_COL},
-								  STDINT_UINT32, buf, 200, STDINT_REPR_DEC));
+		UART_puts(
+			PANIC_UART_OUTPUT,
+			stdint_to_ascii((STDINT_UNION){.uint32 = PANIC_COL}, STDINT_UINT32,
+							buf, 200, STDINT_BASE_REPR_DEC));
 	}
 
 	UART_puts(PANIC_UART_OUTPUT, "\n\rPanic message:\t");
-	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_MESSAGE_PTR);
+	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_MESSAGE_BUF_PTR);
 	UART_puts(PANIC_UART_OUTPUT, "\n\r");
 
-	FOREVER {}	// TODO: TUI with options
+	loop {}	 // TODO: TUI with options
 }
 
 void set_panic(PanicInfo panic_info)
 {
-	strcopy((char *)PANIC_MESSAGE_PTR, panic_info.message,
-			PANIC_MESSAGE_INIT_VALUE);
+	strcopy((char *)PANIC_MESSAGE_BUF_PTR, panic_info.message,
+			PANIC_MESSAGE_LEN_INIT_VALUE);
 
-	strcopy((char *)PANIC_FILE_PTR, panic_info.location.file,
-			PANIC_FILE_INIT_VALUE);
+	strcopy((char *)PANIC_FILE_BUF_PTR, panic_info.location.file,
+			PANIC_FILE_LEN_INIT_VALUE);
 
 	PANIC_LINE = panic_info.location.line;
 	PANIC_COL = panic_info.location.col;
 }
 
-void set_and_throw_panic(PanicInfo panic_info)
+_Noreturn void set_and_throw_panic(PanicInfo panic_info)
 {
 	set_panic(panic_info);
 	panic();

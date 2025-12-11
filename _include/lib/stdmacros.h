@@ -1,3 +1,3 @@
 #pragma once
 
-#define FOREVER while (1)
+#define loop while (1)

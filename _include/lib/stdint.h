@@ -6,6 +6,8 @@
 #define _STD_TYPES_T
 #endif
 
+#define STDINT
+
 typedef enum {
 	STDINT_INT8,
 	STDINT_UINT8,
@@ -17,12 +19,13 @@ typedef enum {
 	STDINT_UINT64,
 } STDINT_TYPES;
 
+/// Base representation of integer numbers
 typedef enum {
-	STDINT_REPR_DEC = 10,
-	STDINT_REPR_HEX = 16,
-	STDINT_REPR_BIN = 2,
-	STDINT_REPR_OCT = 8,
-} STDINT_REPR;
+	STDINT_BASE_REPR_DEC = 10,
+	STDINT_BASE_REPR_HEX = 16,
+	STDINT_BASE_REPR_BIN = 2,
+	STDINT_BASE_REPR_OCT = 8,
+} STDINT_BASE_REPR;
 
 typedef signed char int8;
 typedef unsigned char uint8;
@@ -36,12 +39,11 @@ typedef unsigned int uint32;
 typedef signed long long int64;
 typedef unsigned long long uint64;
 
-#pragma once
-
 #if __SIZEOF_POINTER__ == 4
 typedef int intptr;
-typedef int isize_t typedef unsigned int uintptr;
-typedef unsigned int size_t
+typedef int isize_t;
+typedef unsigned int uintptr;
+typedef unsigned int size_t;
 #elif __SIZEOF_POINTER__ == 8
 #if __SIZEOF_LONG__ == 8
 typedef long intptr;
@@ -74,38 +76,6 @@ typedef unsigned long long uintptr;
 #define INT64_MAX 9223372036854775807LL
 #define UINT64_MAX 18446744073709551615ULL
 
-#define INT_LEAST8_MIN INT8_MIN
-#define INT_LEAST8_MAX INT8_MAX
-#define UINT_LEAST8_MAX UINT8_MAX
-
-#define INT_LEAST16_MIN INT16_MIN
-#define INT_LEAST16_MAX INT16_MAX
-#define UINT_LEAST16_MAX UINT16_MAX
-
-#define INT_LEAST32_MIN INT32_MIN
-#define INT_LEAST32_MAX INT32_MAX
-#define UINT_LEAST32_MAX UINT32_MAX
-
-#define INT_LEAST64_MIN INT64_MIN
-#define INT_LEAST64_MAX INT64_MAX
-#define UINT_LEAST64_MAX UINT64_MAX
-
-#define INT_FAST8_MIN INT32_MIN
-#define INT_FAST8_MAX INT32_MAX
-#define UINT_FAST8_MAX UINT32_MAX
-
-#define INT_FAST16_MIN INT32_MIN
-#define INT_FAST16_MAX INT32_MAX
-#define UINT_FAST16_MAX UINT32_MAX
-
-#define INT_FAST32_MIN INT32_MIN
-#define INT_FAST32_MAX INT32_MAX
-#define UINT_FAST32_MAX UINT32_MAX
-
-#define INT_FAST64_MIN INT64_MIN
-#define INT_FAST64_MAX INT64_MAX
-#define UINT_FAST64_MAX UINT64_MAX
-
 // TODO: acabar estos
 #define INTPTR_MIN LONG_MIN
 #define INTPTR_MAX LONG_MAX
@@ -115,7 +85,7 @@ typedef unsigned long long uintptr;
 #define INTMAX_MAX INT64_MAX
 #define UINTMAX_MAX UINT64_MAX
 
-	typedef union {
+typedef union {
 	int8 int8;
 	uint8 uint8;
 

@@ -27,6 +27,6 @@ char uint8_to_ascii_char(uint8 n);
 /// Panics if provided buf_len is smaller than requiered. Space for the '-' sign
 /// and '\0' is needed
 char *stdint_to_ascii(STDINT_UNION n, STDINT_TYPES n_type, char *buf,
-					  uint64 buf_len, STDINT_REPR repr);
+					  uint64 buf_len, STDINT_BASE_REPR repr);
 
 void test_stdint_to_ascii(int64 test_v, uint64 buf_size);

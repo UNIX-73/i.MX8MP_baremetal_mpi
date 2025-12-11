@@ -18,11 +18,11 @@ void *memcpy64_aligned(void *dst, void *src, uint64 size)
 {
 	if (size == 0) return dst;
 
-	if (((uintptr)dst & 63) != 0)
-		PANIC("memcpy64_aligned: dst not aligned to 64 bytes");
+	if (((uintptr)dst & 15) != 0)
+		PANIC("memcpy64_aligned: dst not aligned to 16 bytes");
 
-	if (((uintptr)src & 63) != 0)
-		PANIC("memcpy64_aligned: src not aligned to 64 bytes");
+	if (((uintptr)src & 15) != 0)
+		PANIC("memcpy64_aligned: src not aligned to 16 bytes");
 
 	if ((size & 63) != 0)
 		PANIC("memcpy64_aligned: size is not a multiple of 64");
@@ -54,9 +54,9 @@ void *memcpy(void *dst, void *src, uint64 size)
 
 #define MEMCPY_TEST_SIZE 1048576 * 4
 
-uint8 src[MEMCPY_TEST_SIZE] __attribute__((aligned(64)));
-uint8 dst[MEMCPY_TEST_SIZE] __attribute__((aligned(64)));
-uint8 ref[MEMCPY_TEST_SIZE] __attribute__((aligned(64)));
+_Alignas(64) uint8 src[MEMCPY_TEST_SIZE];
+_Alignas(64) uint8 dst[MEMCPY_TEST_SIZE];
+_Alignas(64) uint8 ref[MEMCPY_TEST_SIZE];
 
 void test_memcpy(size_t size_start)
 {
@@ -77,7 +77,8 @@ void test_memcpy(size_t size_start)
 			if (dst[(sizeof(dst) - 1 - i) + j] !=
 				src[(sizeof(src) - 1 - i) + j]) {
 				UART_puts(UART_ID_2, "Something went wrong");
-				FOREVER {}
+
+				loop {}
 			}
 		}
 
@@ -85,7 +86,7 @@ void test_memcpy(size_t size_start)
 			UART_puts(UART_ID_2, "i: ");
 			UART_puts(UART_ID_2,
 					  stdint_to_ascii((STDINT_UNION){.int64 = i}, STDINT_UINT64,
-									  buf, 100, STDINT_REPR_DEC));
+									  buf, 100, STDINT_BASE_REPR_DEC));
 			UART_puts(UART_ID_2, " ok\n\r");
 		}
 	}

@@ -5,10 +5,11 @@ DEFINES     ?=
 
 MARCH       ?= armv8-a
 MCPU        ?= cortex-a53+simd
-RS_TARGET	= aarch64-unknown-none
+RS_TARGET	=  aarch64-unknown-none
+CSTD		:= gnu23 	# Project uses c23 standard attributes
 
 ASM_FLAGS   = $(DEFINES)
-C_FLAGS     = $(OPT_LEVEL) $(DEFINES) -std=gnu23 -Wall -Wextra -Werror -ffreestanding -nostdlib -nostdinc -nostartfiles -x c -I$(INCLUDE_DIR) -march=$(MARCH) -mcpu=$(MCPU)
+C_FLAGS     = $(OPT_LEVEL) $(DEFINES) -std=$(CSTD) -Wall -Wextra -Werror -ffreestanding -nostdlib -nostdinc -nostartfiles -x c -I$(INCLUDE_DIR) -march=$(MARCH) -mcpu=$(MCPU)
 LD_FLAGS    = -T linker.ld -Map $(MAP)
 
 $(OBJ_DIR)/drivers/%.o: C_FLAGS += -DDRIVERS

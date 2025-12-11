@@ -1,5 +1,6 @@
 #pragma once
 #include <lib/stdint.h>
+#include <lib/stdbool.h>
 
 typedef enum {
 	UART_ID_1 = 0,
@@ -15,3 +16,5 @@ void UART_init(UART_ID id);
 void UART_putc(UART_ID id, uint8 c);
 
 void UART_puts(const UART_ID id, const char *s);
+
+bool UART_read(UART_ID id, uint8 *data);

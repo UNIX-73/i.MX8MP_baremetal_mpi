@@ -2,8 +2,8 @@ CompileFlags:
   Add: [
     "-I_include",
     "-ffreestanding",
-    "-march=armv8.2-a",
-    "-mcpu=cortex-a76",
+    "-march=armv8-a",
+    "-mcpu=cortex-a53+simd",
     "-Wall",
     "-Werror",
     "-DDRIVERS",

@@ -15,13 +15,21 @@ static void kernel_init()
 	UART_init(UART_ID_2);
 }
 
-void kernel_entry()
+_Noreturn void kernel_entry()
 {
 	kernel_init();
+
+	while (true) {
+		uint8 data;
+
+		if (UART_read(UART_ID_2, &data)) {
+			UART_putc(UART_ID_2, data);
+		}
+	}
 
 #ifdef TEST
 	test_memcpy(0);
 #endif
 
-	FOREVER {}
+	loop {}
 }

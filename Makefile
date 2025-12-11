@@ -50,7 +50,7 @@ uimage: $(BIN)
 	        -d $(BIN) $(UIMAGE)
 
 clean:
-	rm -rf $(OBJ_DIR)/* target
+	rm -rf $(BIN_DIR)/* target
 
 
 disasm: $(OBJ)
