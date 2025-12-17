@@ -1,9 +1,8 @@
 #include <drivers/uart/uart.h>
 #include <kernel/panic.h>
+#include <lib/stdint.h>
 #include <lib/stdmacros.h>
 #include <lib/string.h>
-
-#include "lib/stdint.h"
 
 #define PANIC_UART_OUTPUT UART_ID_2
 
@@ -51,8 +50,12 @@ void init_panic()
 _Noreturn void panic()
 {
 	char buf[200];
+	UART_puts(PANIC_UART_OUTPUT, "\n\r[PANIC!]");
 
-	UART_puts(PANIC_UART_OUTPUT, "\n\r[PANIC!]\n\rPanic file:\t");
+	UART_puts(PANIC_UART_OUTPUT, "\n\rPanic message:\t");
+	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_MESSAGE_BUF_PTR);
+
+	UART_puts(PANIC_UART_OUTPUT, "\n\rPanic file:\t");
 	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_FILE_BUF_PTR);
 	UART_puts(PANIC_UART_OUTPUT, " at line ");
 
@@ -67,10 +70,6 @@ _Noreturn void panic()
 			stdint_to_ascii((STDINT_UNION){.uint32 = PANIC_COL}, STDINT_UINT32,
 							buf, 200, STDINT_BASE_REPR_DEC));
 	}
-
-	UART_puts(PANIC_UART_OUTPUT, "\n\rPanic message:\t");
-	UART_puts(PANIC_UART_OUTPUT, (char *)PANIC_MESSAGE_BUF_PTR);
-	UART_puts(PANIC_UART_OUTPUT, "\n\r");
 
 	loop {}	 // TODO: TUI with options
 }

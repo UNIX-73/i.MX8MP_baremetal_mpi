@@ -9,6 +9,10 @@ SECTIONS {
         *(.text*)
         . = ALIGN(16);
     }
+    
+    .vectors ALIGN(2048) : {
+        KEEP(*(.vectors))
+    }
 
     .rodata : ALIGN(16) {
         *(.rodata*)

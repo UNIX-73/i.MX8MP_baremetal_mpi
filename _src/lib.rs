@@ -21,18 +21,15 @@ unsafe extern "C" {
 
     static PANIC_MESSAGE_BUF_SIZE: u64;
     static PANIC_FILE_BUF_SIZE: u64;
-
 }
 
 #[unsafe(no_mangle)]
 extern "C" fn rust_test_panic() -> ! {
-    panic!("Test working :)")
+    panic!("Test working :)");
 }
 
 #[panic_handler]
 fn rust_panic(info: &PanicInfo) -> ! {
-    UART_put_str(UART_ID::UART_ID_2, "\n\r[Rust panic!]");
-
     let msg_len: usize = unsafe { PANIC_MESSAGE_BUF_SIZE } as usize;
     let file_len: usize = unsafe { PANIC_FILE_BUF_SIZE } as usize;
 
@@ -46,7 +43,6 @@ fn rust_panic(info: &PanicInfo) -> ! {
 
         unsafe {
             core::ptr::copy_nonoverlapping(msg.as_ptr(), PANIC_MESSAGE_BUF_PTR, copy_bytes);
-
             *PANIC_MESSAGE_BUF_PTR.add(copy_bytes) = b'\0';
         }
     }
@@ -58,10 +54,13 @@ fn rust_panic(info: &PanicInfo) -> ! {
         }
 
         let copy_bytes = core::cmp::min(location.file().len(), file_len - 1);
-
+        
         unsafe {
-            core::ptr::copy_nonoverlapping(location.file().as_ptr(), PANIC_FILE_BUF_PTR, copy_bytes);
-
+            core::ptr::copy_nonoverlapping(
+                location.file().as_ptr(),
+                PANIC_FILE_BUF_PTR,
+                copy_bytes,
+            );
             *PANIC_FILE_BUF_PTR.add(copy_bytes) = b'\0';
         }
     }

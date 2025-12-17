@@ -38,16 +38,6 @@ $(BIN): $(TARGET)
 	mkdir -p $(dir $@)
 	$(OBJCOPY) -O binary $(TARGET) $(BIN)
 
-# Uimage
-UIMAGE = $(BIN_DIR)/$(KERNEL_FILE).uImage
-LOAD_ADDR = 0x80000000
-ENTRY_ADDR = 0x80000000
-
-uimage: $(BIN)
-	mkdir -p $(dir $@)
-	mkimage -A arm64 -O linux -T kernel -C none \
-	        -a $(LOAD_ADDR) -e $(ENTRY_ADDR) \
-	        -d $(BIN) $(UIMAGE)
 
 clean:
 	rm -rf $(BIN_DIR)/* target
