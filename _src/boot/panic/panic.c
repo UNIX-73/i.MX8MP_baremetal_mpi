@@ -56,9 +56,11 @@ void init_panic()
 
 	strcopy((char *)PANIC_FILE_BUF_PTR, "Panic file not defined",
 			PANIC_FILE_LEN_INIT_VALUE);
+
+	for (size_t i = 0; i < 32; i++) PANIC_REGISTERS[i] = 0xdeadbeefdeadbeef;
 }
 
-void set_panic(PanicInfo panic_info)
+void set_panic(panic_info panic_info)
 {
 	PANIC_LINE = panic_info.location.line;
 	PANIC_COL = panic_info.location.col;
@@ -84,6 +86,8 @@ _Noreturn void panic()
 #endif
 
 	char buf[200];
+
+	UART_init(PANIC_UART_OUTPUT);
 	PANIC_puts("\n\r[PANIC!]");
 
 	char *panic_reason_str = "INVALID";
@@ -127,8 +131,9 @@ _Noreturn void panic()
 	loop {}	 // TODO: TUI with options
 }
 
-_Noreturn void set_and_throw_panic(PanicInfo panic_info)
+_Noreturn void set_and_throw_panic(panic_info panic_info)
 {
+	_panic_exception_save_gpr();
 	set_panic(panic_info);
 	panic();
 }
@@ -164,6 +169,20 @@ static void log_system_info()
 
 	log_registers();
 }
+
+static char *exception_reg_names[4] = {
+	"ESR",
+	"ELR",
+	"FAR",
+	"SPSR",
+};
+
+static char *el_names[4] = {
+	"EL0",
+	"EL1",
+	"EL2",
+	"EL3",
+};
 
 static void log_exception_info()
 {
@@ -204,19 +223,6 @@ static void log_exception_info()
 
 	char buf[256];
 
-	char *reg_names[4] = {
-		"ESR",
-		"ELR",
-		"FAR",
-		"SPSR",
-	};
-
-	char *el_names[4] = {
-		"EL0",
-		"EL1",
-		"EL2",
-		"EL3",
-	};
 	uint64 values[4] = {
 		esr,
 		elr,
@@ -229,7 +235,7 @@ static void log_exception_info()
 			stdint_to_ascii((STDINT_UNION){.uint64 = values[i]}, STDINT_UINT64,
 							buf, 200, STDINT_BASE_REPR_HEX);
 		PANIC_puts("\t");
-		PANIC_puts(reg_names[i]);
+		PANIC_puts(exception_reg_names[i]);
 		PANIC_puts("_");
 		PANIC_puts(el_names[current_el]);
 		PANIC_puts(": ");
@@ -238,4 +244,29 @@ static void log_exception_info()
 	}
 }
 
-static void log_registers() {}
+static void log_registers()
+{
+	PANIC_puts("Register info:\r\n");
+	char reg_n[8];
+	char reg_v[24];
+
+	for (size_t i = 0; i < 32; i++) {
+		uint64 x_reg = PANIC_REGISTERS[i];
+
+		stdint_to_ascii((STDINT_UNION){.uint64 = i}, STDINT_UINT64, reg_n, 8,
+						STDINT_BASE_REPR_DEC);
+
+		stdint_to_ascii((STDINT_UNION){.uint64 = x_reg}, STDINT_UINT64, reg_v,
+						24, STDINT_BASE_REPR_HEX);
+
+		if (i != 31) {	// Gpr
+			PANIC_puts("\tx");
+			PANIC_puts(reg_n);
+			PANIC_puts(": ");
+		} else	// sp
+			PANIC_puts("\tsp: ");
+
+		PANIC_puts(reg_v);
+		PANIC_puts("\n\r");
+	}
+}

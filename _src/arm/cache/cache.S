@@ -1,8 +1,8 @@
 .section .text
 
 // x0 = void* start, x1 = void* end
-.global _cache_flush_d_range
-_cache_flush_d_range: 
+.global _cache_flush_range
+_cache_flush_range: 
     tst x0, #63
     b.ne hang
     tst x1, #63
@@ -12,8 +12,8 @@ _cache_flush_d_range:
     cmp x1, x0
     b.lt 2f
 
-    dc cvau, x0
     ic ivau, x0
+    dc cvau, x0
 
     add x0, x0, #64
     b 1b

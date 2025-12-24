@@ -1,7 +1,7 @@
 .section .text
 
-// FIXME: Implement it inside the exception vectors
 
+// FIXME: Implement it inside the exception vectors
 
 .align 4
 .global _panic_exception_save_gpr
@@ -33,7 +33,7 @@ _panic_exception_save_gpr:
 
     mov x1, sp
 
-    stp x30, x29, [x0, #(15 * 16)]
+    stp x30, x1, [x0, #(15 * 16)]
 
     ret
 

@@ -3,7 +3,6 @@
 .section .text
 .align 4
 
-// FIXME:
 .global _switch_to_el1
 _switch_to_el1:
  mrs x0, CurrentEL
@@ -24,17 +23,16 @@ _switch_to_el1:
     mov x0, #0x3c5
     msr SPSR_EL2, x0
 
-    ldr x0, =_el1_entry
-    msr ELR_EL2, x0
-
-    adr x0, __text_start
-    ldr x1, =__bss_end
-    bl _cache_flush_d_range
-
     // Enable simd instructions for EL1
     mov  x0, #(3 << 20)    // FPEN = 0b11
     msr  CPACR_EL1, x0
 
+    ldr x0, =_el1_entry
+    msr ELR_EL2, x0
+
+    ldr x0, =__text_start
+    ldr x1, =__bss_end
+    bl _cache_flush_range
 
     dsb sy
     dsb ish

@@ -71,3 +71,5 @@ _ARM_SCTLR_EL1:
 _ARM_SCTLR_EL2:
     mrs x0, SCTLR_EL2
     ret
+
+

@@ -4,7 +4,7 @@
 _start:
     nop
     //  disable DAIF exceptions
-    // msr daifset, #0xf
+    msr daifset, #0xf
 
 #ifdef TEST
     mrs x0, CurrentEL
@@ -16,21 +16,14 @@ _start:
     //  Init EL2 stack
     ldr x0, =__stack_el2_top
     mov sp, x0
-    
-    //  Init El1 stack
-    ldr x0, =__stack_el1_top
-    msr SP_EL1, x0
 
     //  Set EL2 vector table
-    bl  _el2_init_vector
-
+    bl _el2_init_vector
     bl _clean_bss
-
-    bl kernel_entry
+    bl init_panic
+    
+    bl _switch_to_el1
 
 hang:
     wfe
     b hang
-
-
-

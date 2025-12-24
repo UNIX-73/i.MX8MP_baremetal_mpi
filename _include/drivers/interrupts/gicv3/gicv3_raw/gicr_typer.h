@@ -31,7 +31,7 @@ MMIO_DECLARE_REG64_GETTER_N_BASE(GICV3, GICR_TYPER,
 #define AffinityValue_SHIFT 32
 #define AffinityValue_MASK (0xFFFFFFFFULL << AffinityValue_SHIFT)
 
-static inline CpuAffinity GICV3_GICR_TYPER_BF_get_AffinityValue(
+static inline ARM_cpu_affinity GICV3_GICR_TYPER_BF_get_AffinityValue(
 	const GicrTyper r)
 {
 	uint32 affinity =

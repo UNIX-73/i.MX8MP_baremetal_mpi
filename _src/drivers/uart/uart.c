@@ -3,6 +3,9 @@
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 
+#include "drivers/uart/raw/uart_ucr1.h"
+#include "drivers/uart/raw/uart_ucr2.h"
+#include "drivers/uart/raw/uart_ucr3.h"
 #include "drivers/uart/raw/uart_urxd.h"
 #include "drivers/uart/raw/uart_uts.h"
 
@@ -56,11 +59,14 @@ void UART_reset(UART_ID id)
 // FIXME: read the configuration left by the bootloader to watch what is wrong
 void UART_init(UART_ID id)
 {
+	UART_reset(id);
+
 	// 17.2.12.1 7357
 	uintptr periph_base = UART_N_BASE[id];
 
 	UartUcr1Value ucr1 = {0};
 	UART_UCR1_BF_set_UARTEN(&ucr1, true);
+	UART_UCR1_BF_set_RRDYEN(&ucr1, true);  // Rx IRQs
 	UART_UCR1_write(periph_base, ucr1);
 
 	UartUcr2Value ucr2 = {0};
@@ -76,6 +82,7 @@ void UART_init(UART_ID id)
 	UART_UCR3_BF_set_RI(&ucr3, true);
 	UART_UCR3_BF_set_DCD(&ucr3, true);
 	UART_UCR3_BF_set_DSR(&ucr3, true);
+
 	UART_UCR3_write(periph_base, ucr3);
 
 	UartUcr4Value ucr4 = {0};
@@ -95,6 +102,12 @@ void UART_init(UART_ID id)
 
 	UartUmcrValue umcr = {0};
 	UART_UMCR_write(periph_base, umcr);
+
+	// Flush rx fifo
+	UartUrxdValue urxd = UART_URXD_read(periph_base);
+	while (!UART_UTS_BF_get_RXEMPTY(UART_UTS_read(periph_base))) {
+		UART_URDX_BF_get_RX_DATA(urxd);
+	}
 }
 
 bool UART_read(UART_ID id, uint8 *data)

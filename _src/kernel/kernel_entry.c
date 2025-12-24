@@ -5,6 +5,7 @@
 
 #include <arm/exceptions/exceptions.h>
 #include <boot/panic.h>
+#include <drivers/interrupts/gicv3/gicv3.h>
 #include <drivers/uart/uart.h>
 #include <lib/memcpy.h>
 #include <lib/stdint.h>
@@ -16,7 +17,6 @@
 
 static void kernel_init()
 {
-	init_panic();
 	UART_init(UART_ID_2);
 
 	ARM_exceptions_set_status((ARM_exception_status){
@@ -25,6 +25,10 @@ static void kernel_init()
 		.serror = true,
 		.debug = true,
 	});
+
+	GICV3_init_distributor();
+	GICV3_init_cpu(ARM_get_cpu_affinity().aff0);
+	uart_irq_init();
 }
 
 extern uint64 _ARM_ICC_SRE_EL2();
@@ -34,10 +38,7 @@ extern void _switch_to_el1();
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
 _Noreturn void kernel_entry()
 {
-	if (_ARM_currentEL() == 2) {
-		kernel_init();
-		_switch_to_el1();
-	}
+	kernel_init();
 
 	UART_puts(UART_ID_2, "Hello test!\n\r");
 
@@ -51,7 +52,7 @@ _Noreturn void kernel_entry()
 
 		UART_puts(UART_ID_2, "ID: ");
 		UART_puts(UART_ID_2, stdint_to_ascii((STDINT_UNION){.uint32 = affinity},
-											 STDINT_UINT32, buf, 200,
+											 STDINT_UINT32, buf, 500,
 											 STDINT_BASE_REPR_BIN));
 		UART_puts(UART_ID_2, "\n\r");
 	}
@@ -61,13 +62,12 @@ _Noreturn void kernel_entry()
 	size_t el = ARM_get_exception_level();
 	UART_puts(UART_ID_2,
 			  stdint_to_ascii((STDINT_UNION){.uint64 = el}, STDINT_UINT64, buf,
-							  200, STDINT_BASE_REPR_DEC));
+							  500, STDINT_BASE_REPR_DEC));
 
-	
 	UART_puts(UART_ID_2, "\n\rSCTLR_EL1: ");
 	UART_puts(UART_ID_2,
 			  stdint_to_ascii((STDINT_UNION){.uint64 = _ARM_SCTLR_EL1()},
-							  STDINT_UINT64, buf, 200, STDINT_BASE_REPR_BIN));
+							  STDINT_UINT64, buf, 500, STDINT_BASE_REPR_BIN));
 
 	loop
 	{

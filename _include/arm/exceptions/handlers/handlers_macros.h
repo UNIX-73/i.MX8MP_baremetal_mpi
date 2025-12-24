@@ -7,10 +7,10 @@
 #define DECLARE_EL2_EXCEPTION_HANDLER_PANIC(origin, stack, type) \
 	void el2_##origin##_##stack##_##type##_handler(void)         \
 	{                                                            \
-		set_and_throw_panic((PanicInfo){                         \
+		set_and_throw_panic((panic_info){                         \
 			.message = "EL2 EXCEPTION! " #origin #stack #type,   \
 			.location =                                          \
-				(PanicLocation){                                 \
+				(panic_location){                                 \
 					.file = __FILE__,                            \
 					.line = __LINE__,                            \
 					.col = 0,                                    \
@@ -24,10 +24,10 @@
 #define DECLARE_EL1_EXCEPTION_HANDLER_PANIC(origin, stack, type) \
 	void el1_##origin##_##stack##_##type##_handler(void)         \
 	{                                                            \
-		set_and_throw_panic((PanicInfo){                         \
+		set_and_throw_panic((panic_info){                         \
 			.message = "EL1 EXCEPTION! " #origin #stack #type,   \
 			.location =                                          \
-				(PanicLocation){                                 \
+				(panic_location){                                 \
 					.file = __FILE__,                            \
 					.line = __LINE__,                            \
 					.col = 0,                                    \
