@@ -1,3 +1,5 @@
+pub mod uart_buffers;
+
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum UART_ID {
@@ -18,4 +20,5 @@ pub fn UART_put_str(id: UART_ID, s: &str) {
         }
     }
 }
+
 

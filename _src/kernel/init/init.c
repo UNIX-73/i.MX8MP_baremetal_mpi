@@ -8,9 +8,15 @@
 extern kernel_initcall_t __kernel_init_start[];
 extern kernel_initcall_t __kernel_init_end[];
 
+extern void rust_kernel_initcalls(void);
+KERNEL_INITCALL(rust_kernel_initcalls);
+
 void kernel_init(void)
 {
-	UART_init(UART_ID_2);
+	for (kernel_initcall_t *fn = __kernel_init_start; fn < __kernel_init_end;
+		 fn++) {
+		(*fn)();
+	}
 
 	ARM_exceptions_set_status((ARM_exception_status){
 		.fiq = true,
@@ -21,6 +27,9 @@ void kernel_init(void)
 
 	GICV3_init_distributor();
 	GICV3_init_cpu(ARM_get_cpu_affinity().aff0);
+
+	UART_init(UART_ID_2);
+
 	uart_irq_init();
 
 #if TEST
@@ -29,9 +38,4 @@ void kernel_init(void)
 		PANIC("kernel_init section not 8 byte aligned");
 	}
 #endif
-
-	for (kernel_initcall_t *fn = __kernel_init_start; fn < __kernel_init_end;
-		 fn++) {
-		(*fn)();
-	}
 }

@@ -28,13 +28,13 @@ $(OBJ_DIR)/rslib.a: Cargo.toml _src/*.rs
 # Link
 $(TARGET): $(OBJ) $(OBJ_DIR)/rslib.a
 	mkdir -p $(dir $@)
-	$(LD) $(LD_FLAGS) -o $@ $(OBJ) $(OBJ_DIR)/rslib.a
-	make disasm
-	make full-disasm
-
+	$(LD) $(LD_FLAGS) -o $@ \
+    $(OBJ) \
+    $(OBJ_DIR)/rslib.a
 
 # BIN
 $(BIN): $(TARGET)
+
 	mkdir -p $(dir $@)
 	$(OBJCOPY) -O binary $(TARGET) $(BIN)
 

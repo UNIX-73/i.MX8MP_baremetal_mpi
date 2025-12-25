@@ -1,8 +1,11 @@
 #![no_std]
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+#![allow(special_module_name)]
+
 mod drivers;
 mod kernel;
+mod lib;
 
 use core::panic::PanicInfo;
 

@@ -19,5 +19,12 @@ _Noreturn void kernel_entry()
 
 	UART_puts(UART_ID_2, "Hello world!\n\r");
 
+	uint8 data;
+	while (1) {
+		if (UART_read(UART_ID_2, &data)) {
+			UART_putc(UART_ID_2, data);
+		}
+	}
+
 	loop {}
 }
