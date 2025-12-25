@@ -3,24 +3,27 @@
 #include <drivers/interrupts/gicv3/gicv3_raw/gicv3_raw.h>
 #include <lib/stdint.h>
 
+#include "arm/exceptions/exceptions.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicd_ctlr.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicd_icfgr.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicd_ipriorityr.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicd_irouter.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicd_isenabler.h"
 #include "drivers/interrupts/gicv3/gicv3_raw/gicr_waker.h"
+#include "drivers/uart/uart.h"
+#include "lib/string.h"
 
 // Declared at gicv3_arm_interface.S
 extern void GICV3_ARM_ICC_SRE_EL1_write(uint64 v);
 extern void GICV3_ARM_ICC_PMR_EL1_write(uint64 v);
-extern void GICV3_ICC_IGRPEN1_EL1_EL1_write(uint64 v);
+extern void GICV3_ARM_ICC_IGRPEN1_EL1_EL1_write(uint64 v);
 
 static inline void GICV3_arm_interface_enable(void)
 {
 	// Enable system register interface
 	GICV3_ARM_ICC_SRE_EL1_write(1);
 	GICV3_ARM_ICC_PMR_EL1_write(0xFF);
-	GICV3_ICC_IGRPEN1_EL1_EL1_write(1);
+	GICV3_ARM_ICC_IGRPEN1_EL1_EL1_write(1);
 }
 
 /// If irq number is not valid panics
@@ -176,4 +179,38 @@ void uart_irq_init()
 	GICV3_route_spi_to_self(uart_irq);
 
 	GICV3_enable_spi(uart_irq);
+}
+
+extern uint64 GICV3_ARM_ICC_IAR1_EL1_read(void);
+
+uint64 GICV3_get_intid_el1()
+{
+	return GICV3_ARM_ICC_IAR1_EL1_read() & 0xFFFFFF;
+}
+
+imx8mp_irq GICV3_imx8mp_irq_from_intid(uint64 intid)
+{
+#if TEST
+	if (ARM_get_exception_level() != 1)
+		PANIC("Reading EL1 source while not being in EL1");
+
+	if (intid <= 32 || intid > IMX8MP_IRQ_SIZE + 32) {
+		char buf[200];
+		stdint_to_ascii((STDINT_UNION){.uint64 = intid}, STDINT_UINT64, buf,
+						200, STDINT_BASE_REPR_DEC);
+		UART_puts(UART_ID_2, "\r\nUnhandled irq number:\t");
+		UART_puts(UART_ID_2, buf);
+
+		PANIC("UNHANDLED IRQ");
+	}
+#endif
+
+	return (imx8mp_irq)(intid - 32);
+}
+
+extern void GICV3_ARM_ICC_EOIR1_EL1_write(uint64 v);
+
+void GICV3_ack_intid_el1(uint64 irq_token)
+{
+	GICV3_ARM_ICC_EOIR1_EL1_write(irq_token);
 }

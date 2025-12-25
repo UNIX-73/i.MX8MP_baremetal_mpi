@@ -21,6 +21,14 @@ SECTIONS {
 
     .rodata : ALIGN(16) {
         *(.rodata*)
+        *(.rodata.*)        
+
+        . = ALIGN(8);
+        __kernel_init_start = .;
+        KEEP(*(.kernel_init))
+        . = ALIGN(8);
+        __kernel_init_end = .;
+
         . = ALIGN(16);
     }
 

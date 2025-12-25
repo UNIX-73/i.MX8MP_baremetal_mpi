@@ -23,3 +23,7 @@ void GICV3_init_distributor(void);
 void GICV3_init_cpu(size_t cpu);
 
 void uart_irq_init(void);
+
+uint64 GICV3_get_intid_el1();
+imx8mp_irq GICV3_imx8mp_irq_from_intid(uint64 intid);
+void GICV3_ack_intid_el1(uint64 irq_token);

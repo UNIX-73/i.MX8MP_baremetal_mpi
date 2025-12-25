@@ -12,7 +12,7 @@ typedef unsigned long long bitfield64;
 
 /* 8 */
 
-#define BITFIELD8_GET(bm, field) ((bool)(((bitfield8)(bm) >> (field)) & 1u))
+#define BITFIELD8_GET(bm, field) (((bitfield8)(bm) >> (field)) & 1u)
 
 #define BITFIELD8_SET(bf_ptr, field) (*(bf_ptr) |= (bitfield8)(1u << (field)))
 
@@ -24,7 +24,7 @@ typedef unsigned long long bitfield64;
 
 /* 16 */
 
-#define BITFIELD16_GET(bm, field) ((bool)(((bitfield16)(bm) >> (field)) & 1u))
+#define BITFIELD16_GET(bm, field) (((bitfield16)(bm) >> (field)) & 1u)
 
 #define BITFIELD16_SET(bf_ptr, field) (*(bf_ptr) |= (bitfield16)(1u << (field)))
 
@@ -36,7 +36,7 @@ typedef unsigned long long bitfield64;
 
 /* 32 */
 
-#define BITFIELD32_GET(bm, field) ((bool)(((bitfield32)(bm) >> (field)) & 1u))
+#define BITFIELD32_GET(bm, field) (((bitfield32)(bm) >> (field)) & 1u)
 
 #define BITFIELD32_SET(bf_ptr, field) (*(bf_ptr) |= (bitfield32)(1u << (field)))
 
@@ -48,7 +48,7 @@ typedef unsigned long long bitfield64;
 
 /* 64 */
 
-#define BITFIELD64_GET(bm, field) ((bool)(((bitfield64)(bm) >> (field)) & 1ull))
+#define BITFIELD64_GET(bm, field) (((bitfield64)(bm) >> (field)) & 1ull)
 
 #define BITFIELD64_SET(bf_ptr, field) \
 	(*(bf_ptr) |= (bitfield64)(1ull << (field)))
