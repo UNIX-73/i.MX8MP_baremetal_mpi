@@ -33,7 +33,7 @@ KERNEL_INITCALL(uart_stage2, KERNEL_INITCALL_STAGE2);
 static void tmu_stage0()
 {
 	TMU_init_stage0(&TMU_DRIVER, (tmu_cfg){
-									 .warn_max = 25,
+									 .warn_max = 22,
 									 .critical_max = 85,
 								 });
 }

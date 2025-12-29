@@ -8,6 +8,8 @@ GDB="gdb"
 
 _start=0x40000000 
 
+echo "Connecting to JTAG..."
+
 sleep 2
 
 JLinkGDBServer -if $IFACE -device $DEVICE -speed $SPEED &

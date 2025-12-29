@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel/devices/device.h>
+#include <lib/lock/spinlock.h>
 #include <lib/stdbitfield.h>
 
 // Thermal monitoring unit
@@ -16,6 +17,7 @@ typedef struct {
 } tmu_cfg;
 
 typedef struct {
+	spinlock_t state_lock;
 	tmu_cfg cfg;
 	uint8 init_stage;
 	bool warn_pending;	// used for the kernel to ask if a temp warning arrived
@@ -27,7 +29,7 @@ void TMU_init_stage1(const driver_handle *h);
 
 int8 TMU_get_temp(const driver_handle *h);
 
-void TMU_set_warn_temp(const driver_handle *h, int32 temp_c);
+void TMU_set_warn_temp(const driver_handle *h, int8 temp_c);
 bool TMU_get_warnings_enabled(const driver_handle *h);
 void TMU_enable_warnings(const driver_handle *h);
 void TMU_disable_warnings(const driver_handle *h);

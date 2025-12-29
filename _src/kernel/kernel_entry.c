@@ -24,6 +24,8 @@ _Noreturn void kernel_entry()
 
 	char buf1[100];
 
+	int8 warn_temp = 26;
+
 	uint8 data;
 	while (1) {
 		if (UART_read(&UART2_DRIVER, &data)) {
@@ -34,6 +36,14 @@ _Noreturn void kernel_entry()
 
 			UART_puts(&UART2_DRIVER, "\n\r");
 			UART_puts(&UART2_DRIVER, buf1);
+
+			if (TMU_warn_pending(&TMU_DRIVER)) {
+				UART_puts(&UART2_DRIVER, "\n\rWARNING!\n\r");
+
+				TMU_set_warn_temp(&TMU_DRIVER, ++warn_temp);
+
+				TMU_enable_warnings(&TMU_DRIVER);
+			}
 		}
 	}
 

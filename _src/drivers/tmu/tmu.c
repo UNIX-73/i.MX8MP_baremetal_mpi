@@ -7,6 +7,8 @@
 #include "drivers/tmu/raw/tidr.h"
 #include "drivers/tmu/raw/tier.h"
 #include "drivers/tmu/raw/tmhtatr.h"
+#include "kernel/devices/device.h"
+#include "lib/lock/spinlock.h"
 #include "lib/stdbitfield.h"
 #include "lib/stdint.h"
 
@@ -95,49 +97,77 @@ static inline bool TMU_get_irq_status(const driver_handle *h, tmu_irq irq)
 }
 
 static inline void TMU_set_irq_status(const driver_handle *h, tmu_irq irq,
-									  bool enabled)
+									  bool enable)
 {
-	if (enabled == TMU_get_irq_status(h, irq)) return;
+	if (enable == TMU_get_irq_status(h, irq)) return;
 
 	tmu_state *state = (tmu_state *)h->state;
 
 	TmuTierValue tier = TMU_TIER_read(h->base);
 	switch (irq) {
 		case TMU_IRQ_ITTE0:
-			TMU_TIER_ITTEIE0_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE0)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE0);
+			TMU_TIER_ITTEIE0_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE0)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE0);
 			break;
 		case TMU_IRQ_ITTE1:
-			TMU_TIER_ITTEIE1_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE1)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE1);
+			TMU_TIER_ITTEIE1_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE1)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE1);
 			break;
 		case TMU_IRQ_ATTE0:
-			TMU_TIER_ATTEIE0_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE0)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
+			TMU_TIER_ATTEIE0_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE0)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
 			break;
 		case TMU_IRQ_ATTE1:
-			TMU_TIER_ATTEIE1_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
+			TMU_TIER_ATTEIE1_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
 			break;
 		case TMU_IRQ_ATCTE0:
-			TMU_TIER_ATCTEIE0_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE0)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE0);
+			TMU_TIER_ATCTEIE0_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE0)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE0);
 			break;
 		case TMU_IRQ_ATCTE1:
-			TMU_TIER_ATCTEIE1_set(&tier, enabled);
-			enabled ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE1)
-					: BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE1);
+			TMU_TIER_ATCTEIE1_set(&tier, enable);
+			enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE1)
+				   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE1);
 			break;
 		default:
 			PANIC("");
 	}
 
 	TMU_TIER_write(h->base, tier);
+}
+
+// Disables/enables both irq0 and 1 of the status, to avoid an irq arriving
+// while disabling one with TMU_set_irq_status and the other one not being
+// disabled.
+static inline void TMU_ATTEX_irq_status_set(const driver_handle *h, bool atte0,
+											bool atte1)
+{
+	tmu_state *state = TMU_get_state(h);
+
+	if (atte0 == TMU_get_irq_status(h, TMU_IRQ_ATTE0) &&
+		atte1 == TMU_get_irq_status(h, TMU_IRQ_ATTE1))
+		return;
+
+	uint64 flags;
+	spin_lock_irqsave(&state->state_lock, &flags);
+
+	TmuTierValue tier = TMU_TIER_read(h->base);
+	TMU_TIER_ATTEIE0_set(&tier, atte0);
+	TMU_TIER_ATTEIE1_set(&tier, atte1);
+	TMU_TIER_write(h->base, tier);
+
+	atte0 ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE0)
+		  : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
+	atte1 ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
+		  : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
+
+	_spin_unlock_irqrestore(&state->state_lock, flags);
 }
 
 static inline bitfield8 TMU_get_irq_sources(const driver_handle *h)
@@ -296,7 +326,7 @@ static void TMU_unhandled_irq(const driver_handle *, uint64 probe)
 }
 
 // warning irq handler
-static void TMU_ATTEX_irq_handler(const driver_handle *h, uint64)
+static void TMU_ATTEX_irq_handler(const driver_handle *h, uint64 probe)
 {
 #ifdef TEST
 	TMU_panic_if_uninit(h);
@@ -304,8 +334,14 @@ static void TMU_ATTEX_irq_handler(const driver_handle *h, uint64)
 
 	tmu_state *state = TMU_get_state(h);
 
-	TMU_set_irq_status(h, TMU_IRQ_ATTE0, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE1, false);
+	TMU_ack_irq(h, (probe == 0) ? TMU_IRQ_ATTE0 : TMU_IRQ_ATTE1);
+
+	TMU_ATTEX_irq_status_set(h, false, false);
+
+	TmuTmhtatrValue tmhtatr = TMU_TMHTATR_read(h->base);
+	TMU_TMHTATR_EN0_set(&tmhtatr, false);
+	TMU_TMHTATR_EN1_set(&tmhtatr, false);
+	TMU_TMHTATR_write(h->base, tmhtatr);
 
 	state->warn_pending = true;
 }
@@ -333,7 +369,6 @@ void TMU_handle_irq(const driver_handle *h)
 		if (BITFIELD8_GET(irq_sources, irq)) {
 			// The enum is defined so probe 0 is even and probe 1 is odd
 			TMU_IRQ_HANDLERS[irq](h, irq % 2);
-			TMU_ack_irq(h, irq);
 		}
 	}
 }
@@ -342,7 +377,7 @@ void TMU_handle_irq(const driver_handle *h)
 	--- Driver interface fns ---
 */
 
-void TMU_set_warn_temp(const driver_handle *h, int32 temp_c)
+void TMU_set_warn_temp(const driver_handle *h, int8 temp_c)
 {
 #ifdef TEST
 	TMU_panic_if_uninit(h);
@@ -351,8 +386,7 @@ void TMU_set_warn_temp(const driver_handle *h, int32 temp_c)
 	bool atte1_irq = TMU_get_irq_status(h, TMU_IRQ_ATTE1);
 
 	// They already have early returns if it is already disabled
-	TMU_set_irq_status(h, TMU_IRQ_ATTE0, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE1, false);
+	TMU_ATTEX_irq_status_set(h, false, false);
 
 	tmu_state *state = TMU_get_state(h);
 
@@ -386,8 +420,7 @@ void TMU_set_warn_temp(const driver_handle *h, int32 temp_c)
 
 	state->cfg.warn_max = temp_c;
 
-	TMU_set_irq_status(h, TMU_IRQ_ATTE0, atte0_irq);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE1, atte1_irq);
+	TMU_ATTEX_irq_status_set(h, atte0_irq, atte1_irq);
 }
 
 bool TMU_get_warnings_enabled(const driver_handle *h)
@@ -398,20 +431,14 @@ bool TMU_get_warnings_enabled(const driver_handle *h)
 
 void TMU_enable_warnings(const driver_handle *h)
 {
-	if (TMU_get_warnings_enabled(h)) return;
-
-	ARM_exceptions_disable(false, true, false, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE0, true);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE1, true);
-	ARM_exceptions_enable(false, true, false, false);
+	// ARM_exceptions_disable(false, true, false, false);
+	TMU_ATTEX_irq_status_set(h, true, true);
+	// ARM_exceptions_enable(false, true, false, false);
 }
 
 void TMU_disable_warnings(const driver_handle *h)
 {
-	ARM_exceptions_disable(false, true, false, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE0, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATTE1, false);
-	ARM_exceptions_enable(false, true, false, false);
+	TMU_ATTEX_irq_status_set(h, false, false);
 }
 
 // Tells if the warning temperature threashold was reached, calling this
