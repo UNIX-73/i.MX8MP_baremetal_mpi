@@ -1,16 +1,8 @@
 #include <boot/panic.h>
 #include <drivers/tmu/tmu.h>
 #include <drivers/tmu/tmu_raw.h>
+#include <lib/lock/spinlock_irq.h>
 #include <lib/stdmacros.h>
-
-#include "arm/exceptions/exceptions.h"
-#include "drivers/tmu/raw/tidr.h"
-#include "drivers/tmu/raw/tier.h"
-#include "drivers/tmu/raw/tmhtatr.h"
-#include "kernel/devices/device.h"
-#include "lib/lock/spinlock.h"
-#include "lib/stdbitfield.h"
-#include "lib/stdint.h"
 
 const int8 TMU_MAX_SENSOR_TEMP_C = 125;
 const int8 TMU_MIN_SENSOR_TEMP_C = -40;
@@ -93,6 +85,7 @@ static inline int8 TMU_validate_max_temp(int8 temp_c)
 static inline bool TMU_get_irq_status(const driver_handle *h, tmu_irq irq)
 {
 	tmu_state *state = (tmu_state *)h->state;
+
 	return BITFIELD8_GET((state->irq_status), irq);
 }
 
@@ -154,9 +147,6 @@ static inline void TMU_ATTEX_irq_status_set(const driver_handle *h, bool atte0,
 		atte1 == TMU_get_irq_status(h, TMU_IRQ_ATTE1))
 		return;
 
-	uint64 flags;
-	spin_lock_irqsave(&state->state_lock, &flags);
-
 	TmuTierValue tier = TMU_TIER_read(h->base);
 	TMU_TIER_ATTEIE0_set(&tier, atte0);
 	TMU_TIER_ATTEIE1_set(&tier, atte1);
@@ -166,8 +156,6 @@ static inline void TMU_ATTEX_irq_status_set(const driver_handle *h, bool atte0,
 		  : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
 	atte1 ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
 		  : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
-
-	_spin_unlock_irqrestore(&state->state_lock, flags);
 }
 
 static inline bitfield8 TMU_get_irq_sources(const driver_handle *h)
@@ -336,14 +324,12 @@ static void TMU_ATTEX_irq_handler(const driver_handle *h, uint64 probe)
 
 	TMU_ack_irq(h, (probe == 0) ? TMU_IRQ_ATTE0 : TMU_IRQ_ATTE1);
 
-	TMU_ATTEX_irq_status_set(h, false, false);
-
-	TmuTmhtatrValue tmhtatr = TMU_TMHTATR_read(h->base);
-	TMU_TMHTATR_EN0_set(&tmhtatr, false);
-	TMU_TMHTATR_EN1_set(&tmhtatr, false);
-	TMU_TMHTATR_write(h->base, tmhtatr);
-
-	state->warn_pending = true;
+	spinlocked(&state->state_lock)	// It should never be locked by the same
+									// core as all the other locks use irqsave
+	{
+		TMU_ATTEX_irq_status_set(h, false, false);
+		state->warn_pending = true;
+	}
 }
 
 static const tmu_irq_handler TMU_IRQ_HANDLERS[TMU_IRQ_COUNT] = {
@@ -382,63 +368,81 @@ void TMU_set_warn_temp(const driver_handle *h, int8 temp_c)
 #ifdef TEST
 	TMU_panic_if_uninit(h);
 #endif
-	bool atte0_irq = TMU_get_irq_status(h, TMU_IRQ_ATTE0);
-	bool atte1_irq = TMU_get_irq_status(h, TMU_IRQ_ATTE1);
-
-	// They already have early returns if it is already disabled
-	TMU_ATTEX_irq_status_set(h, false, false);
-
 	tmu_state *state = TMU_get_state(h);
 
-	if (temp_c != TMU_validate_max_temp(temp_c))
-		PANIC("Invalid temperature provided, out of sensor range");
+	irq_spinlocked(&state->state_lock)
+	{
+		bool atte0_irq = TMU_get_irq_status(h, TMU_IRQ_ATTE0);
+		bool atte1_irq = TMU_get_irq_status(h, TMU_IRQ_ATTE1);
 
-	TMU_disable(h);
+		// They already have early returns if it is already disabled
+		TMU_ATTEX_irq_status_set(h, false, false);
 
-	// Disable average threashold
-	TmuTmhtatrValue tmhtatr = TMU_TMHTATR_read(h->base);
-	TMU_TMHTATR_EN0_set(&tmhtatr, false);
-	TMU_TMHTATR_EN1_set(&tmhtatr, false);
-	TMU_TMHTATR_write(h->base, tmhtatr);
+		if (temp_c != TMU_validate_max_temp(temp_c))
+			PANIC("Invalid temperature provided, out of sensor range");
 
-	// Set new average treashold
-	TMU_TMHTATR_TEMP0_set(&tmhtatr, temp_c);
-	TMU_TMHTATR_TEMP1_set(&tmhtatr, temp_c);
-	TMU_TMHTATR_write(h->base, tmhtatr);
+		TMU_disable(h);
 
-	TMU_enable(h);	// Enable the tmu
+		// Disable average threashold
+		TmuTmhtatrValue tmhtatr = TMU_TMHTATR_read(h->base);
+		TMU_TMHTATR_EN0_set(&tmhtatr, false);
+		TMU_TMHTATR_EN1_set(&tmhtatr, false);
+		TMU_TMHTATR_write(h->base, tmhtatr);
 
-	// A delay of at least 5us is needed here to reset the TMU internal states
-	// of the last run. Otherwise, the old values might still be used, leading
-	// to unexpected results.
-	for (size_t i = 0; i < 20000; i++) asm volatile("nop");
+		// Set new average treashold
+		TMU_TMHTATR_TEMP0_set(&tmhtatr, temp_c);
+		TMU_TMHTATR_TEMP1_set(&tmhtatr, temp_c);
+		TMU_TMHTATR_write(h->base, tmhtatr);
 
-	// Enable warn threashold
-	TMU_TMHTATR_EN0_set(&tmhtatr, true);
-	TMU_TMHTATR_EN1_set(&tmhtatr, true);
-	TMU_TMHTATR_write(h->base, tmhtatr);
+		TMU_enable(h);	// Enable the tmu
 
-	state->cfg.warn_max = temp_c;
+		// A delay of at least 5us is needed here to reset the TMU internal
+		// states of the last run. Otherwise, the old values might still be
+		// used, leading to unexpected results.
+		for (size_t i = 0; i < 20000; i++) asm volatile("nop");
 
-	TMU_ATTEX_irq_status_set(h, atte0_irq, atte1_irq);
+		// Enable warn threashold
+		TMU_TMHTATR_EN0_set(&tmhtatr, true);
+		TMU_TMHTATR_EN1_set(&tmhtatr, true);
+		TMU_TMHTATR_write(h->base, tmhtatr);
+
+		state->cfg.warn_max = temp_c;
+
+		TMU_ATTEX_irq_status_set(h, atte0_irq, atte1_irq);
+	}
 }
 
 bool TMU_get_warnings_enabled(const driver_handle *h)
 {
-	return TMU_get_irq_status(h, TMU_IRQ_ATTE0) ||
-		   TMU_get_irq_status(h, TMU_IRQ_ATTE1);
+	tmu_state *state = TMU_get_state(h);
+
+	irq_spinlocked(&state->state_lock)
+	{
+		return TMU_get_irq_status(h, TMU_IRQ_ATTE0) ||
+			   TMU_get_irq_status(h, TMU_IRQ_ATTE1);
+	}
+	
+	PANIC("");
 }
 
 void TMU_enable_warnings(const driver_handle *h)
 {
-	// ARM_exceptions_disable(false, true, false, false);
-	TMU_ATTEX_irq_status_set(h, true, true);
-	// ARM_exceptions_enable(false, true, false, false);
+	tmu_state *state = TMU_get_state(h);
+
+	irq_spinlocked(&state->state_lock)
+	{
+		TMU_ATTEX_irq_status_set(h, true, true);
+	}
 }
 
 void TMU_disable_warnings(const driver_handle *h)
 {
-	TMU_ATTEX_irq_status_set(h, false, false);
+	tmu_state *state = TMU_get_state(h);
+
+	irq_spinlocked(&state->state_lock)
+	{
+		TMU_ATTEX_irq_status_set(h, false, false);
+	}
 }
 
 // Tells if the warning temperature threashold was reached, calling this
@@ -448,10 +452,15 @@ bool TMU_warn_pending(const driver_handle *h)
 {
 	tmu_state *state = TMU_get_state(h);
 
-	bool pending = state->warn_pending;
+	bool pending;
 
-	state->warn_pending = false;  // Ack the warning, the kernel must reinit the
-								  // irqs if it wants new warnings
+	irq_spinlocked(&state->state_lock)
+	{
+		pending = state->warn_pending;
+		state->warn_pending = false;  // Ack the warning, the kernel must reinit
+
+		// the irqs if it wants new warnings
+	}
 
 	return pending;
 }
@@ -463,43 +472,46 @@ void TMU_set_critical_temp(const driver_handle *h, int8 temp_c)
 	TMU_panic_if_uninit(h);
 #endif
 
-	TMU_set_irq_status(h, TMU_IRQ_ATCTE0, false);
-	TMU_set_irq_status(h, TMU_IRQ_ATCTE1, false);
-
 	tmu_state *state = TMU_get_state(h);
 
-	if (temp_c != TMU_validate_max_temp(temp_c))
-		PANIC("Invalid temperature provided, out of sensor range");
+	irq_spinlocked(&state->state_lock)
+	{
+		TMU_set_irq_status(h, TMU_IRQ_ATCTE0, false);
+		TMU_set_irq_status(h, TMU_IRQ_ATCTE1, false);
 
-	TMU_disable(h);
+		if (temp_c != TMU_validate_max_temp(temp_c))
+			PANIC("Invalid temperature provided, out of sensor range");
 
-	// Disable average threashold
-	TmuTmhtactrValue tmhtactr = TMU_TMHTACTR_read(h->base);
-	TMU_TMHTACTR_EN0_set(&tmhtactr, false);
-	TMU_TMHTACTR_EN1_set(&tmhtactr, false);
-	TMU_TMHTACTR_write(h->base, tmhtactr);
+		TMU_disable(h);
 
-	// Set new average treashold
-	TMU_TMHTACTR_TEMP0_set(&tmhtactr, temp_c);
-	TMU_TMHTACTR_TEMP1_set(&tmhtactr, temp_c);
-	TMU_TMHTACTR_write(h->base, tmhtactr);
+		// Disable average threashold
+		TmuTmhtactrValue tmhtactr = TMU_TMHTACTR_read(h->base);
+		TMU_TMHTACTR_EN0_set(&tmhtactr, false);
+		TMU_TMHTACTR_EN1_set(&tmhtactr, false);
+		TMU_TMHTACTR_write(h->base, tmhtactr);
 
-	TMU_enable(h);	// Enable the tmu
+		// Set new average treashold
+		TMU_TMHTACTR_TEMP0_set(&tmhtactr, temp_c);
+		TMU_TMHTACTR_TEMP1_set(&tmhtactr, temp_c);
+		TMU_TMHTACTR_write(h->base, tmhtactr);
 
-	// A delay of at least 5us is needed here to reset the TMU internal states
-	// of the last run. Otherwise, the old values might still be used, leading
-	// to unexpected results.
-	for (size_t i = 0; i < 20000; i++) asm volatile("nop");
+		TMU_enable(h);	// Enable the tmu
 
-	// Enable warn threashold
-	TMU_TMHTACTR_EN0_set(&tmhtactr, true);
-	TMU_TMHTACTR_EN1_set(&tmhtactr, true);
-	TMU_TMHTACTR_write(h->base, tmhtactr);
+		// A delay of at least 5us is needed here to reset the TMU internal
+		// states of the last run. Otherwise, the old values might still be
+		// used, leading to unexpected results.
+		for (size_t i = 0; i < 20000; i++) asm volatile("nop");
 
-	state->cfg.critical_max = temp_c;
+		// Enable warn threashold
+		TMU_TMHTACTR_EN0_set(&tmhtactr, true);
+		TMU_TMHTACTR_EN1_set(&tmhtactr, true);
+		TMU_TMHTACTR_write(h->base, tmhtactr);
 
-	TMU_set_irq_status(h, TMU_IRQ_ATCTE0, true);
-	TMU_set_irq_status(h, TMU_IRQ_ATCTE1, true);
+		state->cfg.critical_max = temp_c;
+
+		TMU_set_irq_status(h, TMU_IRQ_ATCTE0, true);
+		TMU_set_irq_status(h, TMU_IRQ_ATCTE1, true);
+	}
 }
 
 int8 TMU_get_temp(const driver_handle *h)

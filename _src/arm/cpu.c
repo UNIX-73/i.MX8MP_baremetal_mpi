@@ -1,5 +1,5 @@
 #include <arm/cpu.h>
-#include <arm/sysregs.h>
+#include <arm/sysregs/sysregs.h>
 
 #include "lib/stdint.h"
 

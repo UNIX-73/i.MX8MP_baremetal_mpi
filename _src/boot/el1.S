@@ -24,8 +24,12 @@ _switch_to_el1:
     msr SPSR_EL2, x0
 
     // Enable simd instructions for EL1
-    mov  x0, #(3 << 20)    // FPEN = 0b11
-    msr  CPACR_EL1, x0
+    mov x0, #(3 << 20)    // FPEN = 0b11
+    msr CPACR_EL1, x0
+
+    // Disable virtual timer for EL1
+    mov x0, #0
+    msr CNTVOFF_EL2, x0
 
     ldr x0, =_el1_entry
     msr ELR_EL2, x0

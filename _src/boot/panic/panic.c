@@ -1,12 +1,11 @@
 #include <arm/exceptions/exceptions.h>
+#include <arm/sysregs/sysregs.h>
 #include <boot/panic.h>
 #include <drivers/uart/uart.h>
+#include <kernel/devices/drivers.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 #include <lib/string.h>
-
-#include "arm/sysregs.h"
-#include "kernel/devices/drivers.h"
 
 #define PANIC_UART_OUTPUT &UART2_DRIVER
 static inline void PANIC_puts(char *s)

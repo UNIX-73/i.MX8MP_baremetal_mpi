@@ -1,21 +1,18 @@
 #pragma once
-#include <lib/stdint.h>
 
-typedef struct {
-	// 0 free / 1 locked
-	volatile uint32 slock;
-} spinlock_t;
+#include "_lock_types.h"
 
 #define SPINLOCK_INIT {.slock = 0}
 
+extern bool _spin_try_lock(spinlock_t *lock);
+#define spin_try_lock(l) _spin_try_lock(l)
+
 extern void _spin_lock(spinlock_t *lock);
-#define spin_lock(lock) _spin_lock(lock)
+#define spin_lock(l) _spin_lock(l)
 
 extern void _spin_unlock(spinlock_t *lock);
-#define spin_unlock(lock) _spin_unlock(lock)
+#define spin_unlock(l) _spin_unlock(l)
 
-extern void _spin_lock_irqsave(spinlock_t *lock, uint64 *flags);
-#define spin_lock_irqsave(lock, flags) _spin_lock_irqsave(lock, flags)
-
-extern void _spin_unlock_irqrestore(spinlock_t *lock, uint64 flags);
-#define spin_unlock_irqrestore(lock, flags) _spin_unlock_irqrestore(lock, flags)
+#define spinlocked(lock_ptr)                           \
+	for (bool _i = (_spin_lock((lock_ptr)), true); _i; \
+		 _i = (_spin_unlock((lock_ptr)), false))

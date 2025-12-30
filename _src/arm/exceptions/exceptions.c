@@ -1,5 +1,5 @@
 #include <arm/exceptions/exceptions.h>
-#include <arm/sysregs.h>
+#include <arm/sysregs/sysregs.h>
 #include <boot/panic.h>
 #include <lib/stdint.h>
 

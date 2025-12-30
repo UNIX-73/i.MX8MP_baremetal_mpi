@@ -3,6 +3,8 @@
 #include <drivers/uart/uart_raw.h>
 #include <lib/stdint.h>
 
+#include "lib/lock/spinlock.h"
+
 // Rust fns (driver buffer control)
 
 extern bool UART_txbuf_push(const driver_handle *h, uint8 v);

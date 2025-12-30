@@ -10,3 +10,5 @@ extern const driver_handle UART3_DRIVER;
 extern const driver_handle UART4_DRIVER;
 
 extern const driver_handle TMU_DRIVER;
+
+extern const driver_handle AGT0_DRIVER;

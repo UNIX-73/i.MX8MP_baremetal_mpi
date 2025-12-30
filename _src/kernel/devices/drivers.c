@@ -1,8 +1,10 @@
 #include <drivers/tmu/tmu.h>
 #include <drivers/uart/uart.h>
 #include <kernel/devices/drivers.h>
+#include <lib/stdmacros.h>
 
 #include "device_map.h"
+#include "drivers/arm_generic_timer/arm_generic_timer.h"
 #include "kernel/devices/device.h"
 
 // GIC
@@ -44,4 +46,11 @@ static tmu_state tmu_priv_state;
 const driver_handle TMU_DRIVER = {
 	.base = TMU_BASE,
 	.state = &tmu_priv_state,
+};
+
+// AGT (Arm Generic Timer)
+static agt_state agt_core0_state;
+const driver_handle AGT0_DRIVER = {
+	.base = false,
+	.state = &agt_core0_state,
 };
