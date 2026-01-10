@@ -26,7 +26,7 @@ $(OBJ_DIR)/rslib.a: Cargo.toml _src/*.rs
 
 
 # Link
-$(TARGET): $(OBJ) $(OBJ_DIR)/rslib.a
+$(TARGET): $(OBJ_DIR)/rslib.a $(OBJ)
 	mkdir -p $(dir $@)
 	$(LD) $(LD_FLAGS) -o $@ \
     $(OBJ) \
@@ -34,7 +34,6 @@ $(TARGET): $(OBJ) $(OBJ_DIR)/rslib.a
 
 # BIN
 $(BIN): $(TARGET)
-
 	mkdir -p $(dir $@)
 	$(OBJCOPY) -O binary $(TARGET) $(BIN)
 

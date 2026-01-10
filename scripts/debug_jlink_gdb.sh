@@ -15,12 +15,12 @@ sleep 2
 JLinkGDBServer -if $IFACE -device $DEVICE -speed $SPEED &
 
 if [[ -e /dev/ttyACM0 ]]; then
-    kitty --hold --title "ACM0" picocom -b 115200 /dev/ttyACM0 &
+    kitty --hold --title "ACM0" picocom -q -b 115200 /dev/ttyACM0 &
 #   kitty --hold --title "ACM0" screen /dev/ttyACM1 115200 &
 fi
 
 if [[ -e /dev/ttyCH343USB0 ]]; then
-    kitty --hold --title "CH343USB0" picocom -b 115200 /dev/ttyCH343USB0 &
+    kitty --hold --title "CH343USB0" picocom -q -b 115200 /dev/ttyCH343USB0 &
 #   kitty --hold --title "CH343USB0" screen /dev/ttyCH343USB1 115200 &
 fi
 

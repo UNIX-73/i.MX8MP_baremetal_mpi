@@ -32,10 +32,6 @@ _switch_to_el1:
     ldr x0, =_el1_entry
     msr ELR_EL2, x0
 
-    ldr x0, =__text_start
-    ldr x1, =__bss_end
-    bl _cache_flush_range
-
     dsb sy
     dsb ish
     isb

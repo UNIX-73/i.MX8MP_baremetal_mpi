@@ -2,16 +2,16 @@
 
 #include <lib/stdint.h>
 
-typedef struct {
-	uint64 x0;
-	uint64 x1;
-	uint64 x2;
-	uint64 x3;
+typedef struct
+{
+    int64 x0;
+    int64 x1;
+    int64 x2;
+    int64 x3;
 } smccc_res_t;
 
-extern smccc_res_t _smc_call(uint32 fid, uint64 arg1, uint64 arg2, uint64 arg3,
-							 uint64 arg4, uint64 arg5, uint64 arg6,
-							 uint64 arg7);
+extern smccc_res_t _smc_call(uint64 fid, uint64 arg1, uint64 arg2, uint64 arg3, uint64 arg4,
+                             uint64 arg5, uint64 arg6, uint64 arg7);
 
 #define ARM_SMCCC_VERSION_FID 0x80000000u
 #define SMCCC_ARCH_FEATURES_FID 0x80000001u
@@ -21,3 +21,5 @@ extern smccc_res_t _smc_call(uint32 fid, uint64 arg1, uint64 arg2, uint64 arg3,
 #define PSCI_VERSION 0x84000000u
 
 uint32 tfa_get_smccc_version(void);
+
+smccc_res_t _TFA_wake_up_core(uint64 coreid);
