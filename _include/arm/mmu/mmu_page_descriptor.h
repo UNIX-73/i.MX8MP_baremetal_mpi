@@ -16,13 +16,12 @@ typedef enum
     MMU_TABLE_LEVEL1,
     MMU_TABLE_LEVEL2,
     MMU_TABLE_LEVEL3,
-} mmu_table_lvl;
+} mmu_table_level;
 
 typedef enum
 {
     MMU_TABLE_DESCRIPTOR_BLOCK = 0,
     MMU_TABLE_DESCRIPTOR_TABLE = 1,
-
 } mmu_table_descriptor_type;
 
 typedef enum
@@ -33,10 +32,18 @@ typedef enum
     MMU_ACCESS_PERMISSION_EL0RO_EL1_RO = 0b11,
 } mmu_access_permission;
 
+typedef enum
+{
+    MMU_SHAREABILITY_NON_SHAREABLE = 0b00,
+    MMU_SHAREABILITY_RESERVED = 0b01,
+    MMU_SHAREABILITY_OUTER_SHAREABLE = 0b10,
+    MMU_SHAREABILITY_INNER_SHAREABLE = 0b11,
+} mmu_shareability;
+
 
 typedef struct
 {
-    uint64 u64;
+    uint64 v;
 } mmu_page_descriptor;
 
 static inline uint64 mmu_granularity_shift(mmu_granularity g)
@@ -57,20 +64,20 @@ static inline uint64 mmu_granularity_shift(mmu_granularity g)
     return 12;
 }
 
-static inline uint64 output_address_bits(mmu_granularity g)
+static inline uint64 output_address_bit_n(mmu_granularity g)
 {
     const uint64 shift = mmu_granularity_shift(g);
-    const uint64 pa_bits = 48 - shift;
+    const uint64 pa_bit_n = 48 - shift;
 
-    return pa_bits;
+    return pa_bit_n;
 }
 
 static inline uint64 output_address_mask(mmu_granularity g)
 {
     const uint64 shift = mmu_granularity_shift(g);
-    const uint64 pa_bits = 48 - shift;
+    const uint64 pa_bit_n = 48 - shift;
 
-    return ((1ULL << pa_bits) - 1) << shift;
+    return ((1ULL << pa_bit_n) - 1) << shift;
 }
 
 
@@ -115,114 +122,112 @@ static inline uint64 output_address_mask(mmu_granularity g)
 // getters
 static inline bool mmu_pd_get_valid(const mmu_page_descriptor pd)
 {
-    return (bool)((pd.u64 >> MMU_PD_VALID_SHIFT) & MMU_PD_BITS(MMU_PD_VALID_WIDTH));
+    return (bool)((pd.v >> MMU_PD_VALID_SHIFT) & MMU_PD_BITS(MMU_PD_VALID_WIDTH));
 }
 
 static inline mmu_table_descriptor_type mmu_pd_get_type(const mmu_page_descriptor pd)
 {
-    return (mmu_table_descriptor_type)((pd.u64 >> MMU_PD_TYPE_SHIFT) &
+    return (mmu_table_descriptor_type)((pd.v >> MMU_PD_TYPE_SHIFT) &
                                        MMU_PD_BITS(MMU_PD_TYPE_WIDTH));
 }
 
 static inline uint8 mmu_pd_get_attr_index(const mmu_page_descriptor pd)
 {
-    return (uint8)((pd.u64 >> MMU_PD_ATTR_INDEX_SHIFT) & MMU_PD_BITS(MMU_PD_ATTR_INDEX_WIDTH));
+    return (uint8)((pd.v >> MMU_PD_ATTR_INDEX_SHIFT) & MMU_PD_BITS(MMU_PD_ATTR_INDEX_WIDTH));
 }
 
 static inline bool mmu_pd_get_non_secure(const mmu_page_descriptor pd)
 {
-    return (bool)((pd.u64 >> MMU_PD_NS_SHIFT) & MMU_PD_BITS(MMU_PD_NS_WIDTH));
+    return (bool)((pd.v >> MMU_PD_NS_SHIFT) & MMU_PD_BITS(MMU_PD_NS_WIDTH));
 }
 
 static inline mmu_access_permission mmu_pd_get_access_permissions(const mmu_page_descriptor pd)
 {
-    return (mmu_access_permission)((pd.u64 >> MMU_PD_AP_SHIFT) & MMU_PD_BITS(MMU_PD_AP_WIDTH));
+    return (mmu_access_permission)((pd.v >> MMU_PD_AP_SHIFT) & MMU_PD_BITS(MMU_PD_AP_WIDTH));
 }
 
-static inline uint8 mmu_pd_get_shareability(const mmu_page_descriptor pd)
+static inline mmu_shareability mmu_pd_get_shareability(const mmu_page_descriptor pd)
 {
-    return (uint8)((pd.u64 >> MMU_PD_SH_SHIFT) & MMU_PD_BITS(MMU_PD_SH_WIDTH));
+    return (mmu_shareability)((pd.v >> MMU_PD_SH_SHIFT) & MMU_PD_BITS(MMU_PD_SH_WIDTH));
 }
 
 static inline bool mmu_pd_get_access_flag(const mmu_page_descriptor pd)
 {
-    return (bool)((pd.u64 >> MMU_PD_AF_SHIFT) & MMU_PD_BITS(MMU_PD_AF_WIDTH));
+    return (bool)((pd.v >> MMU_PD_AF_SHIFT) & MMU_PD_BITS(MMU_PD_AF_WIDTH));
 }
 
 static inline uint64 mmu_pd_get_output_address(const mmu_page_descriptor pd,
                                                mmu_granularity granularity)
 {
-    return (pd.u64 & output_address_mask(granularity)) >> mmu_granularity_shift(granularity);
+    return (pd.v & output_address_mask(granularity));
 }
 
 static inline bool mmu_pd_get_privileged_execute_never(const mmu_page_descriptor pd)
 {
-    return (bool)((pd.u64 >> MMU_PD_PXN_SHIFT) & MMU_PD_BITS(MMU_PD_PXN_WIDTH));
+    return (bool)((pd.v >> MMU_PD_PXN_SHIFT) & MMU_PD_BITS(MMU_PD_PXN_WIDTH));
 }
 
 static inline bool mmu_pd_get_unprivileged_execute_never(const mmu_page_descriptor pd)
 {
-    return (bool)((pd.u64 >> MMU_PD_UXN_SHIFT) & MMU_PD_BITS(MMU_PD_UXN_WIDTH));
+    return (bool)((pd.v >> MMU_PD_UXN_SHIFT) & MMU_PD_BITS(MMU_PD_UXN_WIDTH));
 }
 
 static inline uint8 mmu_pd_get_software_defined(const mmu_page_descriptor pd)
 {
-    return (uint8)((pd.u64 >> MMU_PD_SW_SHIFT) & MMU_PD_BITS(MMU_PD_SW_WIDTH));
+    return (uint8)((pd.v >> MMU_PD_SW_SHIFT) & MMU_PD_BITS(MMU_PD_SW_WIDTH));
 }
 
 
 // setters
 static inline void mmu_pd_set_valid(mmu_page_descriptor* pd, bool valid)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_VALID_SHIFT, MMU_PD_VALID_WIDTH);
-    pd->u64 |= ((uint64)valid << MMU_PD_VALID_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_VALID_SHIFT, MMU_PD_VALID_WIDTH);
+    pd->v |= ((uint64)valid << MMU_PD_VALID_SHIFT);
 }
 
 static inline void mmu_pd_set_type(mmu_page_descriptor* pd, mmu_table_descriptor_type type)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_TYPE_SHIFT, MMU_PD_TYPE_WIDTH);
-    pd->u64 |= ((uint64)type << MMU_PD_TYPE_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_TYPE_SHIFT, MMU_PD_TYPE_WIDTH);
+    pd->v |= ((uint64)type << MMU_PD_TYPE_SHIFT);
 }
 
 static inline void mmu_pd_set_attr_index(mmu_page_descriptor* pd, uint8 attr_index)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_ATTR_INDEX_SHIFT, MMU_PD_ATTR_INDEX_WIDTH);
-    pd->u64 |= ((uint64)attr_index & MMU_PD_BITS(MMU_PD_ATTR_INDEX_WIDTH))
-               << MMU_PD_ATTR_INDEX_SHIFT;
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_ATTR_INDEX_SHIFT, MMU_PD_ATTR_INDEX_WIDTH);
+    pd->v |= ((uint64)attr_index & MMU_PD_BITS(MMU_PD_ATTR_INDEX_WIDTH)) << MMU_PD_ATTR_INDEX_SHIFT;
 }
 
 static inline void mmu_pd_set_non_secure(mmu_page_descriptor* pd, bool non_secure)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_NS_SHIFT, MMU_PD_NS_WIDTH);
-    pd->u64 |= ((uint64)non_secure << MMU_PD_NS_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_NS_SHIFT, MMU_PD_NS_WIDTH);
+    pd->v |= ((uint64)non_secure << MMU_PD_NS_SHIFT);
 }
 
 static inline void mmu_pd_set_access_permissions(mmu_page_descriptor* pd,
                                                  mmu_access_permission permissions)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_AP_SHIFT, MMU_PD_AP_WIDTH);
-    pd->u64 |= ((uint64)permissions << MMU_PD_AP_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_AP_SHIFT, MMU_PD_AP_WIDTH);
+    pd->v |= ((uint64)permissions << MMU_PD_AP_SHIFT);
 }
 
-static inline void mmu_pd_set_shareability(mmu_page_descriptor* pd, uint8 shareability)
+static inline void mmu_pd_set_shareability(mmu_page_descriptor* pd, mmu_shareability shareability)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_SH_SHIFT, MMU_PD_SH_WIDTH);
-    pd->u64 |= ((uint64)shareability & MMU_PD_BITS(MMU_PD_SH_WIDTH)) << MMU_PD_SH_SHIFT;
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_SH_SHIFT, MMU_PD_SH_WIDTH);
+    pd->v |= ((uint64)shareability & MMU_PD_BITS(MMU_PD_SH_WIDTH)) << MMU_PD_SH_SHIFT;
 }
 
 static inline void mmu_pd_set_access_flag(mmu_page_descriptor* pd, bool access_flag)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_AF_SHIFT, MMU_PD_AF_WIDTH);
-    pd->u64 |= ((uint64)access_flag << MMU_PD_AF_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_AF_SHIFT, MMU_PD_AF_WIDTH);
+    pd->v |= ((uint64)access_flag << MMU_PD_AF_SHIFT);
 }
 
 static inline void mmu_pd_set_output_address(mmu_page_descriptor* pd, uint64 output_address,
                                              mmu_granularity granularity)
 {
-    const uint64 shift = mmu_granularity_shift(granularity);
-    const uint64 pa_bits = output_address_bits(granularity);
+    const uint64 pa_bit_n = output_address_bit_n(granularity);
 
-    if (output_address >= (1ULL << pa_bits))
+    if (output_address >= (1ULL << pa_bit_n))
     {
 #ifdef TEST
         PANIC("mmu_pd_set_output_address: invalid output address, out of granularity");
@@ -238,29 +243,28 @@ static inline void mmu_pd_set_output_address(mmu_page_descriptor* pd, uint64 out
         return;
     }
 
-
     const uint64 mask = output_address_mask(granularity);
 
-    pd->u64 &= ~mask;
-    pd->u64 |= (output_address << shift) & mask;
+    pd->v &= ~mask;
+    pd->v |= output_address & mask;
 }
 
 static inline void mmu_pd_set_privileged_execute_never(mmu_page_descriptor* pd, bool pxn)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_PXN_SHIFT, MMU_PD_PXN_WIDTH);
-    pd->u64 |= ((uint64)pxn << MMU_PD_PXN_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_PXN_SHIFT, MMU_PD_PXN_WIDTH);
+    pd->v |= ((uint64)pxn << MMU_PD_PXN_SHIFT);
 }
 
 static inline void mmu_pd_set_unprivileged_execute_never(mmu_page_descriptor* pd, bool uxn)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_UXN_SHIFT, MMU_PD_UXN_WIDTH);
-    pd->u64 |= ((uint64)uxn << MMU_PD_UXN_SHIFT);
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_UXN_SHIFT, MMU_PD_UXN_WIDTH);
+    pd->v |= ((uint64)uxn << MMU_PD_UXN_SHIFT);
 }
 
 static inline void mmu_pd_set_software_defined(mmu_page_descriptor* pd, uint8 software_defined)
 {
-    pd->u64 &= ~MMU_PD_FIELD_MASK(MMU_PD_SW_SHIFT, MMU_PD_SW_WIDTH);
-    pd->u64 |= ((uint64)software_defined & MMU_PD_BITS(MMU_PD_SW_WIDTH)) << MMU_PD_SW_SHIFT;
+    pd->v &= ~MMU_PD_FIELD_MASK(MMU_PD_SW_SHIFT, MMU_PD_SW_WIDTH);
+    pd->v |= ((uint64)software_defined & MMU_PD_BITS(MMU_PD_SW_WIDTH)) << MMU_PD_SW_SHIFT;
 }
 
 

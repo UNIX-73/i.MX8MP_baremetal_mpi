@@ -12,6 +12,10 @@ _switch_to_el1:
 
 
     /* EL1 AArch64 */
+    /*
+    https://arm.jonpalmisc.com/latest_sysreg/AArch64-hcr_el2#fieldset_0-31_31-1 
+    */
+
     mov x0, #(1 << 31)
     msr HCR_EL2, x0
 
@@ -21,7 +25,7 @@ _switch_to_el1:
     mov x0, #0x3c5
     msr SPSR_EL2, x0
 
-    // Enable simd instructions for EL1
+    // Enable simd instructions for EL1 and floating point
     mov x0, #(3 << 20)    // FPEN = 0b11
     msr CPACR_EL1, x0
 

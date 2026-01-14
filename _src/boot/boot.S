@@ -5,14 +5,7 @@ _start:
     nop
     //  disable DAIF exceptions
     msr daifset, #0xf
-
-#ifdef TEST
-    mrs x0, CurrentEL
-    lsr x0, x0, #2 // x0 = x0 >> 2
-    cmp x0, #2
-    b.ne hang
-#endif
-
+    
     mrs x0, MPIDR_EL1
     and x0, x0, #0xFF // core Aff0
 
@@ -28,6 +21,24 @@ _start:
     
     mov sp, x0
 
+    bl setup_system
+#ifdef GDB
+    nop
+    nop
+    nop
+#endif
+    bl _switch_to_el1
+
+setup_system:
+    stp x29, x30, [sp, #-16]!
+
+    bl _init_gpr
+#ifdef TEST
+    mrs x0, CurrentEL
+    lsr x0, x0, #2 // x0 = x0 >> 2
+    cmp x0, #2
+    b.ne hang
+#endif
     bl _setup_stack_el1
     bl _el2_init_vector //  Set EL2 vector table
     bl _clean_bss
@@ -37,7 +48,9 @@ _start:
     ldr x1, =__bss_end
     bl _cache_flush_range
 
-    bl _switch_to_el1
+    ldp x29, x30, [sp], #16
+
+    ret
 
 hang:
     wfe

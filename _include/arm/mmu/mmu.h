@@ -72,34 +72,40 @@ struct
 
 typedef struct
 {
-    bool valid;
-    mmu_table_descriptor_type type;
-    uint8 attr_index;
-    bool non_secure;
-    mmu_access_permission access_permissions;
-    uint8 shareability;
-    bool access_flag;
-    uint64 output_address;
-    bool privileded_execute_never;
-    bool unpriviliged_execute_never;
-    uint8 software_defined;
+    _Alignas(16) bool valid;
+    _Alignas(16) mmu_table_descriptor_type type;
+    _Alignas(16) uint8 attr_index;
+    _Alignas(16) bool non_secure;
+    _Alignas(16) mmu_access_permission access_permissions;
+    _Alignas(16) uint8 shareability;
+    _Alignas(16) bool access_flag;
+    _Alignas(16) uintptr output_address;
+    _Alignas(16) bool privileged_execute_never;
+    _Alignas(16) bool unprivileged_execute_never;
+    _Alignas(16) uint8 software_defined;
 } mmu_page_descriptor_cfg;
+
 
 typedef struct
 {
-    mmu_granularity granularity;
-    mmu_table_lvl level;
     mmu_page_descriptor* table_addr;
-} mmu_table;
+    mmu_granularity granularity;
+    mmu_table_level level;
+} mmu_table_handle;
 
-/// Creates an uninitialized table at the address
-mmu_table* mmu_create_table(void* addr, mmu_granularity granularity);
+/// Creates an uninitialized (set as invalid) table at the address
+bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granularity,
+                    mmu_table_level lvl);
 
 /// Sets a page descriptor values by a config struct
-bool mmu_set_page_descriptor_cfg(mmu_table table, size_t entry, mmu_page_descriptor_cfg cfg);
+bool mmu_set_page_descriptor_cfg(mmu_table_handle table, size_t entry,
+                                 const mmu_page_descriptor_cfg* cfg);
 
 /// Sets the table page descriptor to the provided one
-bool mmu_set_page_descriptor(mmu_table table, size_t entry, mmu_page_descriptor pd);
+bool mmu_set_page_descriptor(mmu_table_handle table, size_t entry, mmu_page_descriptor pd);
 
 /// Gets a copy of the descriptor (not the actual ref)
-bool mmu_get_page_descriptor(mmu_table table, size_t entry, mmu_page_descriptor* pd);
+bool mmu_get_page_descriptor(mmu_table_handle table, size_t entry, mmu_page_descriptor* pd);
+
+
+void mmu_init(mmu_table_handle lvl0_handle);
