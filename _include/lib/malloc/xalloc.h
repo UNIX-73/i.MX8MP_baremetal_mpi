@@ -1,0 +1,49 @@
+#pragma once
+
+#include <lib/stdbool.h>
+#include <lib/stdint.h>
+
+/*
+    ! Not thread safe by itself
+*/
+
+typedef struct
+{
+    uint16 reg_id;
+    uint16 span;
+} xalloc_block_metadata;
+
+
+typedef struct
+{
+    uintptr _region_start;
+    size_t _block_size; //  in bytes
+    size_t _block_n;
+    uint16 _reg_id_n; // represents the next to be asigned region id
+    xalloc_block_metadata* _blocks_metadata;
+} xalloc_handle;
+
+bool xalloc_init(xalloc_handle* handle, uintptr region_start, size_t block_size, size_t block_n,
+                 xalloc_block_metadata* blocks_metadata);
+
+/// in bytes
+size_t xalloc_get_block_size(xalloc_handle* handle);
+
+/// returns the size of a region in blocks
+size_t xalloc_get_region_blocks(xalloc_handle* handle, void* region);
+
+/// returns the size of a region in bytes
+size_t xalloc_get_region_bytes(xalloc_handle* handle, void* region);
+
+/// allocates a region with size block_n * block_size and assigns it a reg_id
+void* xalloc_alloc(xalloc_handle* handle, uint16* reg_id, size_t block_n);
+
+/// allocates a region with size block_n * block_size and assigns it a reg_id and initializes it to
+/// zero
+void* xalloc_calloc(xalloc_handle* handle, uint16* reg_id, size_t block_n);
+
+/// frees a region
+void xalloc_free(xalloc_handle* handle, void* region);
+
+/// frees a region by id
+void xalloc_free_id(xalloc_handle* handle, uint16 region_id);

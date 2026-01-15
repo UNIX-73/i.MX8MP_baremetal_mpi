@@ -1,30 +1,32 @@
 #pragma once
 
 #ifdef _STD_TYPES_T
-#error "Used c stdlib stdint implementation instead of baremetal custom stdint"
+#    error "Used c stdlib stdint implementation instead of baremetal custom stdint"
 #else
-#define _STD_TYPES_T
+#    define _STD_TYPES_T
 #endif
 
 #define STDINT
 
-typedef enum {
-	STDINT_INT8,
-	STDINT_UINT8,
-	STDINT_INT16,
-	STDINT_UINT16,
-	STDINT_INT32,
-	STDINT_UINT32,
-	STDINT_INT64,
-	STDINT_UINT64,
+typedef enum
+{
+    STDINT_INT8,
+    STDINT_UINT8,
+    STDINT_INT16,
+    STDINT_UINT16,
+    STDINT_INT32,
+    STDINT_UINT32,
+    STDINT_INT64,
+    STDINT_UINT64,
 } STDINT_TYPES;
 
 /// Base representation of integer numbers
-typedef enum {
-	STDINT_BASE_REPR_DEC = 10,
-	STDINT_BASE_REPR_HEX = 16,
-	STDINT_BASE_REPR_BIN = 2,
-	STDINT_BASE_REPR_OCT = 8,
+typedef enum
+{
+    STDINT_BASE_REPR_DEC = 10,
+    STDINT_BASE_REPR_HEX = 16,
+    STDINT_BASE_REPR_BIN = 2,
+    STDINT_BASE_REPR_OCT = 8,
 } STDINT_BASE_REPR;
 
 typedef signed char int8;
@@ -45,20 +47,22 @@ typedef int isize_t;
 typedef unsigned int uintptr;
 typedef unsigned int size_t;
 #elif __SIZEOF_POINTER__ == 8
-#if __SIZEOF_LONG__ == 8
+#    if __SIZEOF_LONG__ == 8
 typedef long intptr;
 typedef long isize_t;
 
 typedef unsigned long uintptr;
 typedef unsigned long size_t;
-#else
+#    else
 typedef long long intptr;
 typedef unsigned long long uintptr;
-#endif
+#    endif
 
 #else
-#error "Unsupported pointer size"
+#    error "Unsupported pointer size"
 #endif
+
+#define SIZE_MAX ((size_t)-1)
 
 #define INT8_MIN (-128)
 #define INT8_MAX 127
@@ -85,16 +89,17 @@ typedef unsigned long long uintptr;
 #define INTMAX_MAX INT64_MAX
 #define UINTMAX_MAX UINT64_MAX
 
-typedef union {
-	int8 int8;
-	uint8 uint8;
+typedef union
+{
+    int8 int8;
+    uint8 uint8;
 
-	int16 int16;
-	uint16 uint16;
+    int16 int16;
+    uint16 uint16;
 
-	int32 int32;
-	uint32 uint32;
+    int32 int32;
+    uint32 uint32;
 
-	int64 int64;
-	uint64 uint64;
+    int64 int64;
+    uint64 uint64;
 } STDINT_UNION;

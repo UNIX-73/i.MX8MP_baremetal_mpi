@@ -1,7 +1,6 @@
 use core::ffi::c_void;
 
 pub mod init;
-pub mod malloc;
 
 #[repr(C)]
 pub struct DriverHandle {

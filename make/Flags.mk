@@ -17,3 +17,4 @@ $(OBJ_DIR)/drivers/%.o: C_FLAGS += -DDRIVERS
 $(OBJ_DIR)/kernel/%.o: C_FLAGS += -DKERNEL
 $(OBJ_DIR)/lib/%.o: C_FLAGS += -DLIB
 $(OBJ_DIR)/boot/%.o: C_FLAGS += -DBOOT
+$(OBJ_DIR)/arm/%.o: C_FLAGS += -DARM

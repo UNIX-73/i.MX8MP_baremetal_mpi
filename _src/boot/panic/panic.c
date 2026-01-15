@@ -54,12 +54,12 @@ void init_panic()
 
     PANIC_REASON = PANIC_REASON_UNDEFINED;
 
-    strcopy((char*) PANIC_MESSAGE_BUF_PTR,
+    strcopy((char*)PANIC_MESSAGE_BUF_PTR,
             "Panic message not defined and not changed from init_panic() "
             "initialization stage.",
             PANIC_MESSAGE_LEN_INIT_VALUE);
 
-    strcopy((char*) PANIC_FILE_BUF_PTR, "Panic file not defined", PANIC_FILE_LEN_INIT_VALUE);
+    strcopy((char*)PANIC_FILE_BUF_PTR, "Panic file not defined", PANIC_FILE_LEN_INIT_VALUE);
 
     for (size_t i = 0; i < 32; i++)
         PANIC_REGISTERS[i] = 0xdeadbeefdeadbeef;
@@ -71,9 +71,9 @@ void set_panic(panic_info panic_info)
     PANIC_COL = panic_info.location.col;
     PANIC_REASON = panic_info.panic_reason;
 
-    strcopy((char*) PANIC_MESSAGE_BUF_PTR, panic_info.message, PANIC_MESSAGE_LEN_INIT_VALUE);
+    strcopy((char*)PANIC_MESSAGE_BUF_PTR, panic_info.message, PANIC_MESSAGE_LEN_INIT_VALUE);
 
-    strcopy((char*) PANIC_FILE_BUF_PTR, panic_info.location.file, PANIC_FILE_LEN_INIT_VALUE);
+    strcopy((char*)PANIC_FILE_BUF_PTR, panic_info.location.file, PANIC_FILE_LEN_INIT_VALUE);
 }
 
 static void log_system_info();
@@ -124,10 +124,10 @@ _Noreturn void panic()
     PANIC_puts(panic_reason_str);
 
     PANIC_puts("\n\rPanic message:\t");
-    PANIC_puts((char*) PANIC_MESSAGE_BUF_PTR);
+    PANIC_puts((char*)PANIC_MESSAGE_BUF_PTR);
 
     PANIC_puts("\n\rPanic file:\t");
-    PANIC_puts((char*) PANIC_FILE_BUF_PTR);
+    PANIC_puts((char*)PANIC_FILE_BUF_PTR);
     PANIC_puts(" at line ");
 
     PANIC_puts(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_LINE}, STDINT_UINT32, buf, 200,

@@ -3,6 +3,8 @@
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 
+#include "arm/mmu/mmu_page_descriptor.h"
+
 #ifdef TEST
 #    include <boot/panic.h>
 #endif
@@ -48,32 +50,32 @@ static bool build_pd(mmu_granularity granularity, mmu_table_level lvl,
     if (cfg->output_address >= (1ULL << output_address_bit_n(granularity)))
         return false;
 
-
     uint64 pd_u64 = 0;
 
     // low attributes
-    pd_u64 |= (uint64)cfg->valid;
-    pd_u64 |= (uint64)cfg->type << 1;
-    pd_u64 |= (uint64)(cfg->attr_index & 0b111) << 2;
-    pd_u64 |= (uint64)cfg->non_secure << 5;
-    pd_u64 |= (uint64)cfg->access_permissions << 6;
-    pd_u64 |= (uint64)(cfg->shareability & 0b11) << 8;
-    pd_u64 |= (uint64)cfg->access_flag << 10;
+    pd_u64 |= (uint64)cfg->valid << MMU_PD_VALID_SHIFT;
+    pd_u64 |= (uint64)cfg->type << MMU_PD_TYPE_SHIFT;
+    pd_u64 |= (uint64)(cfg->attr_index & 0b111) << MMU_PD_ATTR_INDEX_SHIFT;
+    pd_u64 |= (uint64)cfg->non_secure << MMU_PD_NS_SHIFT;
+    pd_u64 |= (uint64)cfg->access_permissions << MMU_PD_AP_SHIFT;
+    pd_u64 |= (uint64)(cfg->shareability & 0b11) << MMU_PD_SH_SHIFT;
+    pd_u64 |= (uint64)cfg->access_flag << MMU_PD_AF_SHIFT;
 
     // output_address
     pd_u64 |= cfg->output_address & output_address_mask(granularity);
 
     // high attributes
-    pd_u64 |= (uint64)cfg->privileged_execute_never << 53;
-    pd_u64 |= (uint64)cfg->unprivileged_execute_never << 54;
-    pd_u64 |= (uint64)(cfg->software_defined & 0xF) << 55;
+    pd_u64 |= (uint64)cfg->privileged_execute_never << MMU_PD_PXN_SHIFT;
+    pd_u64 |= (uint64)cfg->unprivileged_execute_never << MMU_PD_UXN_SHIFT;
+    pd_u64 |= (uint64)(cfg->software_defined & 0xF) << MMU_PD_SW_SHIFT;
 
     pd->v = pd_u64;
+
     return true;
 }
 
 bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granularity,
-                    mmu_table_level lvl)
+                    mmu_table_level lvl, mmu_page_descriptor_cfg* pd_cfg)
 {
     if ((uintptr)addr % granularity != 0)
         return false;
@@ -85,19 +87,44 @@ bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granulari
     tbl->level = lvl;
     tbl->table_addr = (mmu_page_descriptor*)addr;
 
-    // init descriptors as invalid
+
+    mmu_page_descriptor pd;
+    (pd_cfg != NULL) ? build_pd(granularity, lvl, pd_cfg, &pd) : (pd.v = 0);
+
     for (size_t i = 0; i < table_entries(granularity); i++)
-        tbl->table_addr[i].v = 0;
+        tbl->table_addr[i] = pd;
 
     return true;
 }
 
+bool mmu_get_page_descriptor_cfg(mmu_table_handle table, size_t entry, mmu_page_descriptor_cfg* cfg)
+{
+    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries(table.granularity))
+        return false;
+
+    mmu_page_descriptor pd = table.table_addr[entry];
+
+    cfg->valid = mmu_pd_get_valid(pd);
+    cfg->type = mmu_pd_get_type(pd);
+    cfg->attr_index = mmu_pd_get_attr_index(pd);
+    cfg->non_secure = mmu_pd_get_non_secure(pd);
+    cfg->access_permissions = mmu_pd_get_access_permissions(pd);
+    cfg->shareability = mmu_pd_get_shareability(pd);
+    cfg->access_flag = mmu_pd_get_access_flag(pd);
+    cfg->output_address = mmu_pd_get_output_address(pd, table.granularity);
+    cfg->privileged_execute_never = mmu_pd_get_privileged_execute_never(pd);
+    cfg->unprivileged_execute_never = mmu_pd_get_unprivileged_execute_never(pd);
+    cfg->software_defined = mmu_pd_get_software_defined(pd);
+
+    return true;
+}
+
+
 bool mmu_set_page_descriptor_cfg(mmu_table_handle table, size_t entry,
                                  const mmu_page_descriptor_cfg* cfg)
 {
-    if (table.table_addr == NULL || entry >= table_entries(table.granularity))
+    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries(table.granularity))
         return false;
-
 
     return build_pd(table.granularity, table.level, cfg, &table.table_addr[entry]);
 }

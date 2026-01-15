@@ -22,4 +22,4 @@ extern smccc_res_t _smc_call(uint64 fid, uint64 arg1, uint64 arg2, uint64 arg3, 
 
 uint32 tfa_get_smccc_version(void);
 
-smccc_res_t _TFA_wake_up_core(uint64 coreid);
+

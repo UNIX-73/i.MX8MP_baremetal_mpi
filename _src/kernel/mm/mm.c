@@ -1,28 +1,22 @@
 #include <arm/mmu/mmu.h>
 #include <kernel/mm/mm.h>
+#include <lib/malloc/xalloc.h>
+#include <lib/stdmacros.h>
+#include <lib/unit/mem.h>
 
-#include "arm/mmu/mmu_page_descriptor.h"
-#include "boot/panic.h"
-#include "drivers/uart/uart.h"
-#include "kernel/devices/drivers.h"
-#include "lib/stdint.h"
-#include "lib/stdmacros.h"
-
+#include "k_mem.h"
 
 _Alignas(1024 * 4) mmu_page_descriptor table_lv0[512];
-
-// 4GiB tables in total
 _Alignas(1024 * 4) mmu_page_descriptor table_lv1[512];
 
 
-void mmu_init()
+void mm_mmu_init()
 {
     mmu_table_handle lvl0_handle;
     mmu_table_handle lvl1_handle;
 
-    mmu_init_table(&lvl0_handle, table_lv0, MMU_GRANULARITY_4KB, MMU_TABLE_LEVEL0);
-
-    mmu_init_table(&lvl1_handle, table_lv1, MMU_GRANULARITY_4KB, MMU_TABLE_LEVEL1);
+    mmu_init_table(&lvl0_handle, table_lv0, MMU_GRANULARITY_4KB, MMU_TABLE_LEVEL0, NULL);
+    mmu_init_table(&lvl1_handle, table_lv1, MMU_GRANULARITY_4KB, MMU_TABLE_LEVEL1, NULL);
 
     mmu_page_descriptor_cfg lvl0_cfg = {
         .valid = true,
@@ -56,7 +50,7 @@ void mmu_init()
         .software_defined = 0,
     };
 
-    for (size_t i = 0; i < 2; i++)
+    for (size_t i = 0; i < 3; i++)
     {
         lvl1_cfg.output_address = i * 0x40000000UL; // i * 1gib for va=pa
         lvl1_cfg.software_defined = i;
@@ -69,6 +63,14 @@ void mmu_init()
     mmu_init(lvl0_handle);
 }
 
+
+void mm_init()
+{
+    mm_kmem_init();
+    mm_mmu_init();
+}
+
+/*
 void test_mmu()
 {
     uintptr test = 0x40000000UL * 1.5;
@@ -89,3 +91,4 @@ void test_mmu()
     if (v != j)
         return;
 }
+*/

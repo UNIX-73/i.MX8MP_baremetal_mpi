@@ -93,13 +93,21 @@ typedef struct
     mmu_table_level level;
 } mmu_table_handle;
 
-/// Creates an uninitialized (set as invalid) table at the address
+/// Creates a table at the address. If the provided cfg is NULL initializes as invalid pages (valid
+/// = 0)
 bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granularity,
-                    mmu_table_level lvl);
+                    mmu_table_level lvl, mmu_page_descriptor_cfg* pd_cfg);
+
+
+/// Gets a page descriptor values and transforms it into the cfg struct representation for easier
+/// manipulation
+bool mmu_get_page_descriptor_cfg(mmu_table_handle table, size_t entry,
+                                 mmu_page_descriptor_cfg* cfg);
 
 /// Sets a page descriptor values by a config struct
 bool mmu_set_page_descriptor_cfg(mmu_table_handle table, size_t entry,
                                  const mmu_page_descriptor_cfg* cfg);
+
 
 /// Sets the table page descriptor to the provided one
 bool mmu_set_page_descriptor(mmu_table_handle table, size_t entry, mmu_page_descriptor pd);

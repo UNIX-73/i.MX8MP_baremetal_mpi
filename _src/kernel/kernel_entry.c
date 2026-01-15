@@ -16,6 +16,7 @@
 #include "kernel/mm/mm.h"
 
 
+
 extern void _secondary_entry(void);
 
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
@@ -29,12 +30,11 @@ _Noreturn void kernel_entry()
 
         UART_puts_sync(&UART2_DRIVER, "MMU:\n\r");
 
-        mmu_init();
+        mm_init();
 
         UART_puts(&UART2_DRIVER, "MMU apparently not crashing\n\r");
     }
 
-    test_mmu();
 
 
     loop

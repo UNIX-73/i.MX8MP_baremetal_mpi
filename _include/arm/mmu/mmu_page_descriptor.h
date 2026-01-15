@@ -268,37 +268,38 @@ static inline void mmu_pd_set_software_defined(mmu_page_descriptor* pd, uint8 so
 }
 
 
-// Page descriptor bit definitions
-#undef MMU_PD_VALID_SHIFT
-#undef MMU_PD_VALID_WIDTH
+#ifndef ARM
+#    undef MMU_PD_VALID_SHIFT
+#    undef MMU_PD_VALID_WIDTH
 
-#undef MMU_PD_TYPE_SHIFT
-#undef MMU_PD_TYPE_WIDTH
+#    undef MMU_PD_TYPE_SHIFT
+#    undef MMU_PD_TYPE_WIDTH
 
-#undef MMU_PD_ATTR_INDEX_SHIFT
-#undef MMU_PD_ATTR_INDEX_WIDTH
+#    undef MMU_PD_ATTR_INDEX_SHIFT
+#    undef MMU_PD_ATTR_INDEX_WIDTH
 
-#undef MMU_PD_NS_SHIFT
-#undef MMU_PD_NS_WIDTH
+#    undef MMU_PD_NS_SHIFT
+#    undef MMU_PD_NS_WIDTH
 
-#undef MMU_PD_AP_SHIFT
-#undef MMU_PD_AP_WIDTH
+#    undef MMU_PD_AP_SHIFT
+#    undef MMU_PD_AP_WIDTH
 
-#undef MMU_PD_SH_SHIFT
-#undef MMU_PD_SH_WIDTH
+#    undef MMU_PD_SH_SHIFT
+#    undef MMU_PD_SH_WIDTH
 
-#undef MMU_PD_AF_SHIFT
-#undef MMU_PD_AF_WIDTH
+#    undef MMU_PD_AF_SHIFT
+#    undef MMU_PD_AF_WIDTH
 
-#undef MMU_PD_PXN_SHIFT
-#undef MMU_PD_PXN_WIDTH
+#    undef MMU_PD_PXN_SHIFT
+#    undef MMU_PD_PXN_WIDTH
 
-#undef MMU_PD_UXN_SHIFT
-#undef MMU_PD_UXN_WIDTH
+#    undef MMU_PD_UXN_SHIFT
+#    undef MMU_PD_UXN_WIDTH
 
-#undef MMU_PD_SW_SHIFT
-#undef MMU_PD_SW_WIDTH
+#    undef MMU_PD_SW_SHIFT
+#    undef MMU_PD_SW_WIDTH
 
 // helpers
-#undef MMU_PD_BITS
-#undef MMU_PD_FIELD_MASK
+#    undef MMU_PD_BITS
+#    undef MMU_PD_FIELD_MASK
+#endif

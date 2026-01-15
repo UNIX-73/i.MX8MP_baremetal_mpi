@@ -70,4 +70,11 @@ SECTIONS {
         . += (__NUM_CORES * __EL1_STACK_SIZE);
         __stacks_el1_end = .;
     }
+
+    /* aligned to 2MiB pages, 1GiB size */
+    .kernel_mem (NOLOAD) : ALIGN(0x100000 * 2) {
+        __kernel_mem_start = .;
+        . += 0x40000000;
+        __kernel_mem_end = .;
+    }
 }
