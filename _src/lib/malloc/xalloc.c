@@ -2,8 +2,10 @@
 #include <lib/malloc/xalloc.h>
 #include <lib/stdmacros.h>
 
+#include "lib/stdint.h"
 
-#define EMPTY_BLOCK UINT16_MAX
+
+#define EMPTY_BLOCK UINT64_MAX
 #define NOT_FOUND -1
 
 
@@ -33,7 +35,7 @@ static void free_by_idx(xalloc_handle* handle, isize_t i)
         PANIC("xalloc_free: double free");
 
 #ifdef TEST
-    uint16 first_id = handle->_blocks_metadata[i].reg_id;
+    uint64 first_id = handle->_blocks_metadata[i].reg_id;
 #endif
 
     for (size_t j = i; j < i + span; j++)
@@ -103,7 +105,7 @@ i_loop:
     return NOT_FOUND;
 }
 
-static isize_t search_reg_id(xalloc_handle* handle, uint16 region_id)
+static isize_t search_reg_id(xalloc_handle* handle, uint64 region_id)
 {
     if (region_id >= handle->_reg_id_n)
         return NOT_FOUND;
@@ -121,7 +123,7 @@ static isize_t search_reg_id(xalloc_handle* handle, uint16 region_id)
     return NOT_FOUND;
 }
 
-static isize_t search_reg_addr_idx(xalloc_handle* handle, void* region)
+static inline isize_t search_reg_addr_idx(xalloc_handle* handle, void* region)
 {
     uintptr addr = (uintptr)region;
 
@@ -152,7 +154,7 @@ static isize_t search_reg_addr_idx(xalloc_handle* handle, void* region)
 
 
 bool xalloc_init(xalloc_handle* handle, uintptr region_start, size_t block_size, size_t block_n,
-                 xalloc_block_metadata* blocks_metadata)
+                 xalloc_block_metadata blocks_metadata[])
 {
     if (!handle || !blocks_metadata)
         return false;
@@ -161,8 +163,8 @@ bool xalloc_init(xalloc_handle* handle, uintptr region_start, size_t block_size,
     if (region_start % block_size != 0)
         return false;
 
-    // only UINT16_MAX - 1 blocks can be used
-    if (block_n >= UINT16_MAX)
+    // only UINT64_MAX - 1 blocks can be used
+    if (block_n >= UINT64_MAX)
         return false;
 
     *handle = (xalloc_handle) {
@@ -198,6 +200,16 @@ size_t xalloc_get_region_blocks(xalloc_handle* handle, void* region)
     return handle->_blocks_metadata[i].span;
 }
 
+bool xalloc_get_region_id(xalloc_handle* handle, void* region, uint64* id)
+{
+    isize_t i = search_reg_addr_idx(handle, region);
+    if (i == NOT_FOUND)
+        return false;
+
+    *id = i;
+    return true;
+}
+
 
 size_t xalloc_get_region_bytes(xalloc_handle* handle, void* region)
 {
@@ -205,7 +217,7 @@ size_t xalloc_get_region_bytes(xalloc_handle* handle, void* region)
 }
 
 
-void* xalloc_alloc(xalloc_handle* handle, uint16* reg_id, size_t block_n)
+void* xalloc_alloc(xalloc_handle* handle, uint64* reg_id, size_t block_n)
 {
     if (!handle || !block_n)
         return NULL;
@@ -220,7 +232,7 @@ void* xalloc_alloc(xalloc_handle* handle, uint16* reg_id, size_t block_n)
 
     if (region_idx == NOT_FOUND || region_idx < 0)
     {
-        *reg_id = (uint16)-1;
+        *reg_id = (uint64)-1;
         return NULL;
     }
 
@@ -245,7 +257,7 @@ void* xalloc_alloc(xalloc_handle* handle, uint16* reg_id, size_t block_n)
 }
 
 
-void* xalloc_calloc(xalloc_handle* handle, uint16* reg_id, size_t block_n)
+void* xalloc_calloc(xalloc_handle* handle, uint64* reg_id, size_t block_n)
 {
     void* addr = xalloc_alloc(handle, reg_id, block_n);
     if (!addr)
@@ -267,7 +279,7 @@ void xalloc_free(xalloc_handle* handle, void* region)
 }
 
 
-void xalloc_free_id(xalloc_handle* handle, uint16 region_id)
+void xalloc_free_id(xalloc_handle* handle, uint64 region_id)
 {
     isize_t i = search_reg_id(handle, region_id);
     free_by_idx(handle, i);

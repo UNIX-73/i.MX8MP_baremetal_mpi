@@ -16,7 +16,6 @@
 #include "kernel/mm/mm.h"
 
 
-
 extern void _secondary_entry(void);
 
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
@@ -35,7 +34,25 @@ _Noreturn void kernel_entry()
         UART_puts(&UART2_DRIVER, "MMU apparently not crashing\n\r");
     }
 
+    kmem_id i;
+    void* adr = kalloc(5000, "test", false, &i);
 
+    UART_puts(&UART2_DRIVER, mm_get_kmem_tag(i));
+
+
+    kfree(adr);
+
+    void* adr2 = kalloc(5000, "test2", false, &i);
+
+    if (adr != adr2)
+    {
+        UART_puts(&UART2_DRIVER, "NOT EQUAL");
+    }
+    else
+    {
+        UART_puts(&UART2_DRIVER, " EQUAL\n\r");
+        UART_puts(&UART2_DRIVER, mm_get_kmem_tag(i));
+    }
 
     loop
     {
