@@ -50,7 +50,7 @@ uint64 AGT_cnt_time_us(void)
 /*
 	Timer
 */
-static inline agt_state *get_state(const driver_handle *h)
+static inline agt_state *get_state_(const driver_handle *h)
 {
 	return (agt_state *)h->state;
 }
@@ -64,12 +64,12 @@ static inline agt_state *get_state(const driver_handle *h)
 #define timer_fired() ((bool)((_ARM_CNTV_CTL_EL0_get() >> 2) & 0b1ul))
 
 // Unlocked AGT_timer_schedule_cb
-static inline bool UNLOCKED_timer_schedule(const driver_handle *h,
+static inline bool UNLOCKED_timer_schedule_(const driver_handle *h,
 										   uint64 cycles, timer_cb_t cb,
 										   timer_arg arg)
 {
 	bool overrides;
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 
 	overrides = timer_is_enabled();
 
@@ -89,7 +89,7 @@ static inline bool UNLOCKED_timer_schedule(const driver_handle *h,
 bool AGT_timer_schedule_cycles(const driver_handle *h, uint64 cycles,
 							   timer_cb_t cb, timer_arg arg)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 	bool overrides;
 
 	// check if this call has been made under another timer callback, if true,
@@ -112,7 +112,7 @@ bool AGT_timer_schedule_cycles(const driver_handle *h, uint64 cycles,
 	// standard function
 	irq_spinlocked(&state->lock)
 	{
-		overrides = UNLOCKED_timer_schedule(h, cycles, cb, arg);
+		overrides = UNLOCKED_timer_schedule_(h, cycles, cb, arg);
 	}
 
 	return overrides;
@@ -121,7 +121,7 @@ bool AGT_timer_schedule_cycles(const driver_handle *h, uint64 cycles,
 bool AGT_timer_schedule_delta(const driver_handle *h, uint64 delta_ns,
 							  timer_cb_t cb, timer_arg arg)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 	bool overrides;
 
 	uint64 cycles = cycles() + AGT_ns_to_cycles(delta_ns);
@@ -148,7 +148,7 @@ bool AGT_timer_schedule_delta(const driver_handle *h, uint64 delta_ns,
 	// standard function
 	irq_spinlocked(&state->lock)
 	{
-		overrides = UNLOCKED_timer_schedule(h, cycles, cb, arg);
+		overrides = UNLOCKED_timer_schedule_(h, cycles, cb, arg);
 	}
 
 	return overrides;
@@ -156,7 +156,7 @@ bool AGT_timer_schedule_delta(const driver_handle *h, uint64 delta_ns,
 
 bool AGT_timer_is_armed(const driver_handle *h)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 
 	if (spin_try_lock(&state->defer_cb.under_callback_gate)) {
 		return state->defer_cb.under_cb_scheduled;
@@ -168,7 +168,7 @@ bool AGT_timer_is_armed(const driver_handle *h)
 bool AGT_timer_has_fired(const driver_handle *h)
 {
 	bool fired;
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 
 	if (spin_try_lock(&state->defer_cb.under_callback_gate)) {
 		fired = state->timer_fired;	 // it is safe to access this value without
@@ -189,7 +189,7 @@ bool AGT_timer_has_fired(const driver_handle *h)
 
 void AGT_timer_cancel(const driver_handle *h)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 
 	if (spin_try_lock(&state->defer_cb.under_callback_gate)) {
 		// Cancels the defered timer
@@ -203,7 +203,7 @@ void AGT_timer_cancel(const driver_handle *h)
 
 void AGT_handle_irq(const driver_handle *h)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 	irq_spinlocked(&state->lock)
 	{
 		disable_timer();
@@ -223,7 +223,7 @@ void AGT_handle_irq(const driver_handle *h)
 		// If a new schedule was set while under the callback,
 		// under_cb_scheduled will be true. This is the defer of the scheduling.
 		if (state->defer_cb.under_cb_scheduled) {
-			UNLOCKED_timer_schedule(h, state->defer_cb.cycles_v,
+			UNLOCKED_timer_schedule_(h, state->defer_cb.cycles_v,
 									state->defer_cb.under_cb_timer_cb,
 									state->defer_cb.under_cb_arg);
 		}
@@ -232,7 +232,7 @@ void AGT_handle_irq(const driver_handle *h)
 
 void AGT_init_stage0(const driver_handle *h)
 {
-	agt_state *state = get_state(h);
+	agt_state *state = get_state_(h);
 
 	state->lock.slock = 0;	// open
 	state->timer_cb = NULL;

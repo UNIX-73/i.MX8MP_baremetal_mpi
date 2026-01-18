@@ -9,7 +9,7 @@
 #include <lib/string.h>
 
 #define PANIC_UART_OUTPUT &UART2_DRIVER
-static inline void PANIC_puts(char* s)
+static inline void PANIC_puts_(char* s)
 {
     while (*s)
         UART_putc_sync(PANIC_UART_OUTPUT, *s++);
@@ -76,7 +76,7 @@ void set_panic(panic_info panic_info)
     strcopy((char*)PANIC_FILE_BUF_PTR, panic_info.location.file, PANIC_FILE_LEN_INIT_VALUE);
 }
 
-static void log_system_info();
+static void log_system_info_();
 
 // TODO: use panic via exceptions
 _Noreturn void panic()
@@ -98,9 +98,9 @@ _Noreturn void panic()
                     STDINT_BASE_REPR_DEC);
 
 
-    PANIC_puts("\n\r[PANIC!]\n\rCore: ");
-    PANIC_puts(buf);
-    PANIC_puts("\n\r");
+    PANIC_puts_("\n\r[PANIC!]\n\rCore: ");
+    PANIC_puts_(buf);
+    PANIC_puts_("\n\r");
 
 
     char* panic_reason_str = "INVALID";
@@ -120,27 +120,27 @@ _Noreturn void panic()
             break;
     }
 
-    PANIC_puts("\n\rPanic reason:\t");
-    PANIC_puts(panic_reason_str);
+    PANIC_puts_("\n\rPanic reason:\t");
+    PANIC_puts_(panic_reason_str);
 
-    PANIC_puts("\n\rPanic message:\t");
-    PANIC_puts((char*)PANIC_MESSAGE_BUF_PTR);
+    PANIC_puts_("\n\rPanic message:\t");
+    PANIC_puts_((char*)PANIC_MESSAGE_BUF_PTR);
 
-    PANIC_puts("\n\rPanic file:\t");
-    PANIC_puts((char*)PANIC_FILE_BUF_PTR);
-    PANIC_puts(" at line ");
+    PANIC_puts_("\n\rPanic file:\t");
+    PANIC_puts_((char*)PANIC_FILE_BUF_PTR);
+    PANIC_puts_(" at line ");
 
-    PANIC_puts(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_LINE}, STDINT_UINT32, buf, 200,
+    PANIC_puts_(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_LINE}, STDINT_UINT32, buf, 200,
                                STDINT_BASE_REPR_DEC));
 
     if (PANIC_COL != 0)
     {
-        PANIC_puts(":");
-        PANIC_puts(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_COL}, STDINT_UINT32, buf, 200,
+        PANIC_puts_(":");
+        PANIC_puts_(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_COL}, STDINT_UINT32, buf, 200,
                                    STDINT_BASE_REPR_DEC));
     }
 
-    log_system_info();
+    log_system_info_();
 
     loop
     {
@@ -156,53 +156,53 @@ _Noreturn void set_and_throw_panic(panic_info panic_info)
 }
 
 // System info
-static void log_exception_info();
-static void log_registers();
+static void log_exception_info_();
+static void log_registers_();
 
-static void log_system_info()
+static void log_system_info_()
 {
     ARM_exception_status status = ARM_exceptions_get_status();
 
-    PANIC_puts("\n\rExceptions state:\n\r");
+    PANIC_puts_("\n\rExceptions state:\n\r");
 
     char* enabled = "enabled\n\r";
     char* disabled = "disabled\n\r";
 
-    PANIC_puts("\tFIQ:    ");
-    PANIC_puts(status.fiq ? enabled : disabled);
+    PANIC_puts_("\tFIQ:    ");
+    PANIC_puts_(status.fiq ? enabled : disabled);
 
-    PANIC_puts("\tIRQ:    ");
-    PANIC_puts(status.irq ? enabled : disabled);
+    PANIC_puts_("\tIRQ:    ");
+    PANIC_puts_(status.irq ? enabled : disabled);
 
-    PANIC_puts("\tSError: ");
-    PANIC_puts(status.serror ? enabled : disabled);
+    PANIC_puts_("\tSError: ");
+    PANIC_puts_(status.serror ? enabled : disabled);
 
-    PANIC_puts("\tDebug:  ");
-    PANIC_puts(status.debug ? enabled : disabled);
+    PANIC_puts_("\tDebug:  ");
+    PANIC_puts_(status.debug ? enabled : disabled);
 
     // TODO: log registers
 
     if (PANIC_REASON == PANIC_REASON_EXCEPTION)
-        log_exception_info();
+        log_exception_info_();
 
-    log_registers();
+    log_registers_();
 }
 
-static char* exception_reg_names[4] = {
+static char* exception_reg_names_[4] = {
     "ESR",
     "ELR",
     "FAR",
     "SPSR",
 };
 
-static char* el_names[4] = {
+static char* el_names_[4] = {
     "EL0",
     "EL1",
     "EL2",
     "EL3",
 };
 
-static void log_exception_info()
+static void log_exception_info_()
 {
     uint64 esr;
     uint64 elr;
@@ -214,7 +214,7 @@ static void log_exception_info()
     switch (current_el)
     {
         case 3:
-            PANIC_puts("\n\rException info (EL3)!\n\r");
+            PANIC_puts_("\n\rException info (EL3)!\n\r");
             return;
         case 2:
             esr = _ARM_ESR_EL2();
@@ -222,7 +222,7 @@ static void log_exception_info()
             far = _ARM_FAR_EL2();
             spsr = _ARM_SPSR_EL2();
 
-            PANIC_puts("\n\rException info (EL2):\n\r");
+            PANIC_puts_("\n\rException info (EL2):\n\r");
             break;
         case 1:
             esr = _ARM_ESR_EL1();
@@ -230,13 +230,13 @@ static void log_exception_info()
             far = _ARM_FAR_EL1();
             spsr = _ARM_SPSR_EL1();
 
-            PANIC_puts("\n\rException info (EL1):\n\r");
+            PANIC_puts_("\n\rException info (EL1):\n\r");
             break;
         case 0:
-            PANIC_puts("\n\rException info (EL0)!\n\r");
+            PANIC_puts_("\n\rException info (EL0)!\n\r");
             return;
         default:
-            PANIC_puts("\n\rERROR: log_exception_info\n\r");
+            PANIC_puts_("\n\rERROR: log_exception_info\n\r");
             return;
     }
 
@@ -253,19 +253,19 @@ static void log_exception_info()
     {
         char* fmt_value = stdint_to_ascii((STDINT_UNION) {.uint64 = values[i]}, STDINT_UINT64, buf,
                                           200, STDINT_BASE_REPR_HEX);
-        PANIC_puts("\t");
-        PANIC_puts(exception_reg_names[i]);
-        PANIC_puts("_");
-        PANIC_puts(el_names[current_el]);
-        PANIC_puts(": ");
-        PANIC_puts(fmt_value);
-        PANIC_puts("\n\r");
+        PANIC_puts_("\t");
+        PANIC_puts_(exception_reg_names_[i]);
+        PANIC_puts_("_");
+        PANIC_puts_(el_names_[current_el]);
+        PANIC_puts_(": ");
+        PANIC_puts_(fmt_value);
+        PANIC_puts_("\n\r");
     }
 }
 
-static void log_registers()
+static void log_registers_()
 {
-    PANIC_puts("Register info:\r\n");
+    PANIC_puts_("Register info:\r\n");
     char reg_n[8];
     char reg_v[24];
 
@@ -281,14 +281,14 @@ static void log_registers()
 
         if (i != 31)
         { // Gpr
-            PANIC_puts("\tx");
-            PANIC_puts(reg_n);
-            PANIC_puts(": ");
+            PANIC_puts_("\tx");
+            PANIC_puts_(reg_n);
+            PANIC_puts_(": ");
         }
         else // sp
-            PANIC_puts("\tsp: ");
+            PANIC_puts_("\tsp: ");
 
-        PANIC_puts(reg_v);
-        PANIC_puts("\n\r");
+        PANIC_puts_(reg_v);
+        PANIC_puts_("\n\r");
     }
 }

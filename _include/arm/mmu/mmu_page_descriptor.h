@@ -2,12 +2,13 @@
 
 #include <boot/panic.h>
 #include <lib/stdint.h>
+#include <lib/unit/mem.h>
 
 typedef enum
 {
-    MMU_GRANULARITY_4KB = 4 * 1024,
-    MMU_GRANULARITY_16KB = 16 * 1024,
-    MMU_GRANULARITY_64KB = 64 * 1024,
+    MMU_GRANULARITY_4KB = 4 * MEM_KiB,
+    MMU_GRANULARITY_16KB = 16 * MEM_KiB,
+    MMU_GRANULARITY_64KB = 64 * MEM_KiB,
 } mmu_granularity;
 
 typedef enum

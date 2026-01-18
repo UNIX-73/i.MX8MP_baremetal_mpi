@@ -32,13 +32,13 @@ extern uint64 _mmu_get_ID_AA64MMFR0_EL1(void);
 extern void _mmu_asm_init(void);
 
 
-static inline size_t table_entries(mmu_granularity g)
+static inline size_t table_entries_(mmu_granularity g)
 {
     return g / sizeof(mmu_page_descriptor);
 }
 
 
-static bool build_pd(mmu_granularity granularity, mmu_table_level lvl,
+static bool build_pd_(mmu_granularity granularity, mmu_table_level lvl,
                      const mmu_page_descriptor_cfg* cfg, mmu_page_descriptor* pd)
 {
     if (lvl == MMU_TABLE_LEVEL0 && cfg->type == MMU_TABLE_DESCRIPTOR_BLOCK)
@@ -89,9 +89,9 @@ bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granulari
 
 
     mmu_page_descriptor pd;
-    (pd_cfg != NULL) ? build_pd(granularity, lvl, pd_cfg, &pd) : (pd.v = 0);
+    (pd_cfg != NULL) ? build_pd_(granularity, lvl, pd_cfg, &pd) : (pd.v = 0);
 
-    for (size_t i = 0; i < table_entries(granularity); i++)
+    for (size_t i = 0; i < table_entries_(granularity); i++)
         tbl->table_addr[i] = pd;
 
     return true;
@@ -99,7 +99,7 @@ bool mmu_init_table(mmu_table_handle* tbl, void* addr, mmu_granularity granulari
 
 bool mmu_get_page_descriptor_cfg(mmu_table_handle table, size_t entry, mmu_page_descriptor_cfg* cfg)
 {
-    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries(table.granularity))
+    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries_(table.granularity))
         return false;
 
     mmu_page_descriptor pd = table.table_addr[entry];
@@ -123,16 +123,16 @@ bool mmu_get_page_descriptor_cfg(mmu_table_handle table, size_t entry, mmu_page_
 bool mmu_set_page_descriptor_cfg(mmu_table_handle table, size_t entry,
                                  const mmu_page_descriptor_cfg* cfg)
 {
-    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries(table.granularity))
+    if (cfg == NULL || table.table_addr == NULL || entry >= table_entries_(table.granularity))
         return false;
 
-    return build_pd(table.granularity, table.level, cfg, &table.table_addr[entry]);
+    return build_pd_(table.granularity, table.level, cfg, &table.table_addr[entry]);
 }
 
 
 bool mmu_get_page_descriptor(mmu_table_handle table, size_t entry, mmu_page_descriptor* pd)
 {
-    if (table.table_addr == NULL || entry >= table_entries(table.granularity))
+    if (table.table_addr == NULL || entry >= table_entries_(table.granularity))
         return false;
 
     *pd = table.table_addr[entry];
@@ -140,19 +140,19 @@ bool mmu_get_page_descriptor(mmu_table_handle table, size_t entry, mmu_page_desc
 }
 
 //  DDI0500J_cortex_a53_trm.pdf p.104
-static inline bool mmu_supports_4kb(uint64 id_aa64mmfr0)
+static inline bool mmu_supports_4kb_(uint64 id_aa64mmfr0)
 {
     return (((id_aa64mmfr0 >> 28) & 0xF) == 0);
 }
 
 //  DDI0500J_cortex_a53_trm.pdf p.104
-static inline bool mmu_supports_64kb(uint64 id_aa64mmfr0)
+static inline bool mmu_supports_64kb_(uint64 id_aa64mmfr0)
 {
     return (((id_aa64mmfr0 >> 24) & 0xF) == 0);
 }
 
 //  DDI0500J_cortex_a53_trm.pdf p.104
-static inline bool mmu_supports_16kb(uint64 id_aa64mmfr0)
+static inline bool mmu_supports_16kb_(uint64 id_aa64mmfr0)
 {
     return (((id_aa64mmfr0 >> 20) & 0xF) == 0);
 }
@@ -172,15 +172,15 @@ void mmu_init(mmu_table_handle lvl0_handle)
     switch (lvl0_handle.granularity)
     {
         case MMU_GRANULARITY_4KB:
-            if (!mmu_supports_4kb(id_aa64mmfr0))
+            if (!mmu_supports_4kb_(id_aa64mmfr0))
                 PANIC("4KB granularity not supported");
             break;
         case MMU_GRANULARITY_16KB:
-            if (!mmu_supports_16kb(id_aa64mmfr0))
+            if (!mmu_supports_16kb_(id_aa64mmfr0))
                 PANIC("16KB granularity not supported");
             break;
         case MMU_GRANULARITY_64KB:
-            if (!mmu_supports_64kb(id_aa64mmfr0))
+            if (!mmu_supports_64kb_(id_aa64mmfr0))
                 PANIC("64KB granularity not supported");
             break;
         default:

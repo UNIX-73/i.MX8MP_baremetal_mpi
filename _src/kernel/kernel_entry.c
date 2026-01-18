@@ -12,11 +12,17 @@
 #include <lib/string.h>
 
 #include "arm/cpu.h"
+#include "arm/mmu/mmu_page_descriptor.h"
 #include "kernel/devices/drivers.h"
 #include "kernel/mm/mm.h"
+#include "lib/unit/mem.h"
+#include "mm/init/early_kalloc.h"
 
+p_uintptr early_kalloc(size_t bytes, const char* tag, bool permanent);
 
 extern void _secondary_entry(void);
+void early_kalloc_init();
+extern void early_kalloc_test();
 
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
 _Noreturn void kernel_entry()
@@ -26,33 +32,14 @@ _Noreturn void kernel_entry()
     if (aff.aff0 == 0)
     {
         kernel_init();
+        mm_early_init();
 
-        UART_puts_sync(&UART2_DRIVER, "MMU:\n\r");
+        early_kalloc_test();
 
-        mm_init();
 
         UART_puts(&UART2_DRIVER, "MMU apparently not crashing\n\r");
     }
 
-    kmem_id i;
-    void* adr = kalloc(5000, "test", false, &i);
-
-    UART_puts(&UART2_DRIVER, mm_get_kmem_tag(i));
-
-
-    kfree(adr);
-
-    void* adr2 = kalloc(5000, "test2", false, &i);
-
-    if (adr != adr2)
-    {
-        UART_puts(&UART2_DRIVER, "NOT EQUAL");
-    }
-    else
-    {
-        UART_puts(&UART2_DRIVER, " EQUAL\n\r");
-        UART_puts(&UART2_DRIVER, mm_get_kmem_tag(i));
-    }
 
     loop
     {

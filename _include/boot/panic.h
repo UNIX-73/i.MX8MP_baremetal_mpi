@@ -55,6 +55,25 @@ _Noreturn void panic();
         .panic_reason = PANIC_REASON_MANUAL_ABORT, \
     })
 
+
+/*
+    Assert
+*/
+
+#define _ASSERT1(cond) ((cond) ? (void)0 : PANIC("assert not met!"))
+#define _DEBUG_ASSERT1(cond) ((cond) ? (void)0 : PANIC("debug assert not met!"))
+#define _ASSERT2(cond, msg) ((cond) ? (void)0 : PANIC(msg))
+#define GET_ASSERT(_1, _2, NAME, ...) NAME
+
+
+#define ASSERT(...) GET_ASSERT(__VA_ARGS__, _ASSERT2, _ASSERT1)(__VA_ARGS__)
+#ifdef DEBUG
+#    define DEBUBG_ASSERT(...) GET_ASSERT(__VA_ARGS__, _ASSERT2, _DEBUG_ASSERT1)(__VA_ARGS__)
+#else
+#    define DEBUBG_ASSERT(condition)
+#endif
+
+
 /// In the case of an exception panic, saves all the register in the extern
 /// savers
 extern void _panic_exception_save_gpr();

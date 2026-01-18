@@ -21,7 +21,7 @@ void GICV3_set_cpu_priority_threshold(uint8 threshold)
 	_GICV3_ARM_ICC_PMR_EL1_write(threshold);
 }
 
-static inline void GICV3_arm_interface_enable(void)
+static inline void GICV3_arm_interface_enable_(void)
 {
 	// Enable system register interface
 	_GICV3_ARM_ICC_SRE_EL1_write(1);
@@ -30,7 +30,7 @@ static inline void GICV3_arm_interface_enable(void)
 }
 
 /// If irq number is not valid panics
-static void GICV3_validate_spi_id(const driver_handle *h, irq_id id)
+static void GICV3_validate_spi_id_(const driver_handle *h, irq_id id)
 {
 	GicdTyper typer = GICV3_GICD_TYPER_read(h->base);
 	uint32 itlines = (uint32)GICV3_GICD_TYPER_ITLinesNumber_get(typer);
@@ -43,7 +43,7 @@ static void GICV3_validate_spi_id(const driver_handle *h, irq_id id)
 void GICV3_set_spi_group1ns(const driver_handle *h, irq_id id, bool v)
 {
 	// imx8mp irqs start from 32 as 0..31 in the gic are reserved
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	uint32 n = ((uint32)id.n) / 32;
 	uint32 bit = ((uint32)id.n) % 32;
@@ -56,7 +56,7 @@ void GICV3_set_spi_group1ns(const driver_handle *h, irq_id id, bool v)
 void GICV3_route_spi_to_cpu(const driver_handle *h, irq_id id,
 							ARM_cpu_affinity affinity)
 {
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	GicdIrouter r = {0};
 
@@ -77,7 +77,7 @@ void GICV3_route_spi_to_self(const driver_handle *h, irq_id id)
 
 void GICV3_enable_spi(const driver_handle *h, irq_id id)
 {
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	uint32 n = ((uint32)id.n) / 32;
 	uint32 bit = ((uint32)id.n) % 32;
@@ -87,7 +87,7 @@ void GICV3_enable_spi(const driver_handle *h, irq_id id)
 
 void GICV3_set_priority(const driver_handle *h, irq_id id, uint8 priority)
 {
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	uint32 n = ((uint32)id.n) / 4;
 	uint32 byte_idx = ((uint32)id.n) % 4;
@@ -99,7 +99,7 @@ void GICV3_set_priority(const driver_handle *h, irq_id id, uint8 priority)
 
 void GICV3_set_edge_triggered(const driver_handle *h, irq_id id)
 {
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	uint32 n = ((uint32)id.n) / 16;
 	uint32 slot = ((uint32)id.n) % 16;
@@ -111,7 +111,7 @@ void GICV3_set_edge_triggered(const driver_handle *h, irq_id id)
 
 void GICV3_set_level_sensitive(const driver_handle *h, irq_id id)
 {
-	GICV3_validate_spi_id(h, id);
+	GICV3_validate_spi_id_(h, id);
 
 	uint32 n = ((uint32)id.n) / 16;
 	uint32 slot = ((uint32)id.n) % 16;
@@ -154,7 +154,7 @@ void GICV3_init_distributor(const driver_handle *h)
 void GICV3_init_cpu(const driver_handle *h, size_t cpu)
 {
 	GICV3_wake_redistributor(h, cpu);
-	GICV3_arm_interface_enable();
+	GICV3_arm_interface_enable_();
 }
 
 void GICV3_init_irq(const driver_handle *h, irq_id id, uint8 priority,

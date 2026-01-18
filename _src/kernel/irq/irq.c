@@ -20,14 +20,14 @@ typedef struct
     const driver_handle* h;
 } kernel_irq_handler;
 
-static kernel_irq_handler KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_SIZE];
+static kernel_irq_handler KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_SIZE];
 
-static void unhandled_irq(const driver_handle*)
+static void unhandled_irq_(const driver_handle*)
 {
     PANIC("UNHANDLED IRQ");
 }
 
-static inline kernel_irq_handler build_handler(driver_irq_handler handler, const driver_handle* h)
+static inline kernel_irq_handler build_handler_(driver_irq_handler handler, const driver_handle* h)
 {
     return (kernel_irq_handler) {
         .handler = handler,
@@ -35,27 +35,27 @@ static inline kernel_irq_handler build_handler(driver_irq_handler handler, const
     };
 }
 
-static void init_irq_handler_table()
+static void init_irq_handler_table_()
 {
     for (size_t i = 0; i < IMX8MP_IRQ_SIZE; i++)
     {
-        KERNEL_IRQ_HANDLER_TABLE[i] = (kernel_irq_handler) {unhandled_irq, NULL};
+        KERNEL_IRQ_HANDLER_TABLE_[i] = (kernel_irq_handler) {unhandled_irq_, NULL};
     }
 
-    KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_UART1] = build_handler(UART_handle_irq, &UART1_DRIVER);
-    KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_UART2] = build_handler(UART_handle_irq, &UART2_DRIVER);
-    KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_UART3] = build_handler(UART_handle_irq, &UART3_DRIVER);
-    KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_UART4] = build_handler(UART_handle_irq, &UART4_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_UART1] = build_handler_(UART_handle_irq, &UART1_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_UART2] = build_handler_(UART_handle_irq, &UART2_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_UART3] = build_handler_(UART_handle_irq, &UART3_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_UART4] = build_handler_(UART_handle_irq, &UART4_DRIVER);
 
-    KERNEL_IRQ_HANDLER_TABLE[IMX8MP_IRQ_ANAMIX_TEMP] = build_handler(TMU_handle_irq, &TMU_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[IMX8MP_IRQ_ANAMIX_TEMP] = build_handler_(TMU_handle_irq, &TMU_DRIVER);
 
     // TODO: 0..31 irq enum
-    KERNEL_IRQ_HANDLER_TABLE[27] = build_handler(AGT_handle_irq, &AGT0_DRIVER);
+    KERNEL_IRQ_HANDLER_TABLE_[27] = build_handler_(AGT_handle_irq, &AGT0_DRIVER);
 }
 
-KERNEL_INITCALL(init_irq_handler_table, KERNEL_INITCALL_STAGE0);
+KERNEL_INITCALL(init_irq_handler_table_, KERNEL_INITCALL_STAGE0);
 
 void kernel_handle_irq(irq_id irq)
 {
-    KERNEL_IRQ_HANDLER_TABLE[irq.n].handler(KERNEL_IRQ_HANDLER_TABLE[irq.n].h);
+    KERNEL_IRQ_HANDLER_TABLE_[irq.n].handler(KERNEL_IRQ_HANDLER_TABLE_[irq.n].h);
 }

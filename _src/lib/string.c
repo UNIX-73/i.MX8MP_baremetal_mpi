@@ -27,7 +27,7 @@ char uint8_to_ascii_char(uint8 n)
     return (char)(n + '0');
 }
 
-static const uint8 STDINT_BASE_REPR_CHARS[16] = {
+static const uint8 STDINT_BASE_REPR_CHARS_[16] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
 };
 
@@ -151,7 +151,7 @@ char* stdint_to_ascii(STDINT_UNION n, STDINT_TYPES n_type, char* buf, uint64 buf
         if (i + 1 + (uint64)negative + repr_len >= buf_len)
             goto panic;
 
-        buf[i++] = STDINT_BASE_REPR_CHARS[digit];
+        buf[i++] = STDINT_BASE_REPR_CHARS_[digit];
     }
 
     switch (repr)

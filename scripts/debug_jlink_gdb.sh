@@ -32,7 +32,8 @@ kitty --title "GDB A53" \
         -ex "monitor halt" \
         -ex "set \$pc = $_start" \
         -ex "load" \
-        -ex "layout split"
+        -ex "layout split" \
+        -ex "break kernel_entry"
 
 pkill screen
 
