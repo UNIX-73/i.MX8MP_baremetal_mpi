@@ -29,6 +29,8 @@ p_uintptr page_allocator_testing_init();
 #endif
 
 
+size_t page_allocator_bytes_to_order(size_t bytes);
+
 mm_page page_malloc(size_t order, mm_page_data p);
 
 void page_free(mm_page p);

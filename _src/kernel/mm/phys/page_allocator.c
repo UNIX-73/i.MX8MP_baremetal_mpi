@@ -221,6 +221,13 @@ static inline mm_page build_page(size_t i)
 }
 
 
+size_t page_allocator_bytes_to_order(size_t bytes)
+{
+    size_t pages = div_round_up(bytes, MM_PAGE_BYTES);
+    return log2_ceil(pages);
+}
+
+
 mm_page page_malloc(size_t order, mm_page_data p)
 {
     ASSERT(order <= s->max_order);

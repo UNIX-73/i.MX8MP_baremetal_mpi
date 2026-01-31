@@ -40,7 +40,7 @@ static inline uint64 tbl_alignment(mmu_granularity g)
 }
 
 
-static inline mmu_tbl tbl0_from_handle(mmu_handle* h)
+static inline mmu_tbl ttbr0_from_handle(mmu_handle* h)
 {
     DEBUG_ASSERT(h->tbl0_ && ((p_uintptr)h->tbl0_ % tbl_alignment(h->cfg_.lo_gran) == 0));
 
@@ -48,7 +48,7 @@ static inline mmu_tbl tbl0_from_handle(mmu_handle* h)
 }
 
 
-static inline mmu_tbl tbl1_from_handle(mmu_handle* h)
+static inline mmu_tbl ttbr1_from_handle(mmu_handle* h)
 {
     DEBUG_ASSERT(h->tbl1_ && ((p_uintptr)h->tbl1_ % tbl_alignment(h->cfg_.hi_gran) == 0));
 
@@ -136,10 +136,9 @@ static inline mmu_pg_cfg cfg_from_pd(mmu_hw_pd pd)
 
 /// divides a block into a next level table and updates the parent. Returns the created table (of a
 /// lower level)
-static inline mmu_tbl split_block(mmu_handle* h, mmu_tbl parent, size_t index, mmu_tbl_level l,
-                                  mmu_op_info* info)
+static inline mmu_tbl split_block(mmu_handle* h, mmu_tbl parent, mmu_granularity g, size_t index,
+                                  mmu_tbl_level l, mmu_op_info* info)
 {
-    mmu_granularity g = h->cfg_.lo_gran;
     mmu_alloc alloc = h->alloc_;
 
     mmu_hw_pd old = parent.pds[index];
@@ -180,14 +179,33 @@ static inline bool tbl_is_null(mmu_tbl tbl, mmu_granularity g)
 
 static inline bool va_uses_ttbr0(mmu_handle* h, v_uintptr va)
 {
-    uint64 mask = ~((1ULL << h->cfg_.hi_va_addr_bits) - 1);
-    return (va & mask) != mask;
+    uint64 top = va >> h->cfg_.lo_va_addr_bits;
+
+    if (top == 0)
+        return true;
+
+    uint64 ones = (1ULL << (64 - h->cfg_.hi_va_addr_bits)) - 1;
+    if (top == ones)
+        return false;
+
+    PANIC("non valid va");
 }
 
-static inline mmu_tbl get_first_tbl(mmu_handle* h, v_uintptr va)
+
+static inline mmu_granularity granularity_from_va(mmu_handle* h, v_uintptr va)
 {
-    return va_uses_ttbr0(h, va) ? tbl0_from_handle(h) : tbl1_from_handle(h);
+    return va_uses_ttbr0(h, va) ? h->cfg_.lo_gran : h->cfg_.hi_gran;
 }
+
+
+static inline mmu_tbl get_first_tbl(mmu_handle* h, v_uintptr va, mmu_granularity* g)
+{
+    if (g)
+        *g = granularity_from_va(h, va);
+
+    return va_uses_ttbr0(h, va) ? ttbr0_from_handle(h) : ttbr1_from_handle(h);
+}
+
 
 static inline mmu_granularity get_granularity(mmu_handle* h, v_uintptr va)
 {

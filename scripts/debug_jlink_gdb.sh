@@ -6,11 +6,13 @@ IFACE=JTAG
 ELF="/home/unab/files/master/tfm/imx8mp/project/bin/kernel.elf"
 GDB="gdb"
 
-_start=0x40200000 
+LOW_TEXT=0x40200000
+HIGH_TEXT=0xffff800040200000
+
 
 echo "Connecting to JTAG..."
 
-sleep 2
+sleep 0.2
 
 JLinkGDBServer -if $IFACE -device $DEVICE -speed $SPEED &
 
@@ -26,15 +28,9 @@ fi
 
 kitty --title "GDB A53" \
     $GDB $ELF \
-        --init-command=/home/unab/.gdbinit \
-        -ex "set architecture aarch64" \
-        -ex "target remote localhost:2331" \
-        -ex "monitor halt" \
-        -ex "set \$pc = $_start" \
-        -ex "load" \
-        -ex "layout split" \
-        -ex "break kernel_entry"
+        -x /home/unab/files/master/tfm/imx8mp/project/scripts/config.gdb
 
 pkill screen
+pkill JLinkGDBServer
 
 exit

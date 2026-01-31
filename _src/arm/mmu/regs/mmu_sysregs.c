@@ -100,7 +100,6 @@ void mmu_apply_cfg(mmu_cfg cfg)
     tcr |= (uint64)(ips & 0b111ULL) << 32; // IPS
 
 
-    sctlr &= ~(1ULL << 0);
     sctlr &= ~(1ULL << 1);
     sctlr &= ~(1ULL << 2);
     sctlr &= ~(1ULL << 12);
@@ -108,7 +107,7 @@ void mmu_apply_cfg(mmu_cfg cfg)
     sctlr |= ((uint64)cfg.i_cache << 12);   // I instruction cache
     sctlr |= ((uint64)cfg.d_cache << 2);    // D data cache
     sctlr |= ((uint64)cfg.align_trap << 1); // A alignment trap
-    sctlr |= ((uint64)cfg.enable << 0);     // M MMU enable
+    // sctlr |= ((uint64)cfg.enable << 0);  // M MMU enable
 
 
     _mmu_set_MAIR_EL1(mair);

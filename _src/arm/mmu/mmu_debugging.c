@@ -99,7 +99,7 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
 
 void mmu_debug_dump(mmu_handle* h, mmu_tbl_rng ttbrx)
 {
-    mmu_debug_dump_tbl_(h, tbl0_from_handle(h), ttbrx, MMU_TBL_LV0, 0, 0);
+    mmu_debug_dump_tbl_(h, ttbr0_from_handle(h), ttbrx, MMU_TBL_LV0, 0, 0);
 }
 
 

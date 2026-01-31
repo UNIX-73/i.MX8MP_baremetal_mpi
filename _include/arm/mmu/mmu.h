@@ -27,7 +27,6 @@ typedef void (*mmu_free)(void* addr);
 
 
 typedef struct {
-    _Alignas(16) bool enable;
     _Alignas(16) bool d_cache;
     _Alignas(16) bool i_cache;
     _Alignas(16) bool align_trap;
@@ -89,8 +88,26 @@ typedef struct {
 } mmu_op_info;
 
 
-// initializes the private structures needed for mmu control.
+/// initializes the private structures needed for mmu control
 void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free);
+
+/// activates the mmu with the previously initialized config
+void mmu_activate();
+
+/// deactivates the mmu. Does not flush any cache, it is responsability of the user
+void mmu_deactivate();
+
+
+bool mmu_is_active();
+
+
+/// deallocates all the allocated data, it does not change any sysreg or mmu configuration so
+/// changing the used handle or disabling de mmu before is needed
+void mmu_destroy(mmu_handle* h, mmu_op_info* info);
+
+void mmu_cfg_new(mmu_cfg* out, bool d_cache, bool i_cache, bool align_trap, bool hi_enable,
+                 bool lo_enable, uint8 hi_va_addr_bits, uint8 lo_va_addr_bits,
+                 mmu_granularity hi_gran, mmu_granularity lo_gran);
 
 
 mmu_pg_cfg mmu_pg_cfg_new(uint8 attr_index, mmu_access_permission ap, uint8 shareability,
@@ -98,7 +115,7 @@ mmu_pg_cfg mmu_pg_cfg_new(uint8 attr_index, mmu_access_permission ap, uint8 shar
 
 
 mmu_cfg mmu_get_cfg(mmu_handle* h);
-void mmu_reconfig(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free);
+void mmu_reconfig_allocators(mmu_handle* h, mmu_alloc alloc, mmu_free free);
 
 
 bool mmu_map(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t size, mmu_pg_cfg cfg,

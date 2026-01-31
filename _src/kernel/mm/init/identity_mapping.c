@@ -34,15 +34,14 @@ static void im_free(void* addr)
 }
 
 
-mmu_handle early_identity_mapping()
+void early_identity_mapping(mmu_handle* h)
 {
     mmu_cfg cfg = (mmu_cfg) {
-        .enable = false,
-        .d_cache = false,
-        .i_cache = false,
-        .align_trap = true,
+        .d_cache = true,
+        .i_cache = true,
+        .align_trap = false,
 
-        .hi_enable = false,
+        .hi_enable = true,
         .lo_enable = true,
 
         .hi_va_addr_bits = 48,
@@ -52,22 +51,15 @@ mmu_handle early_identity_mapping()
         .lo_gran = MMU_GRANULARITY_4KB,
     };
 
-    mmu_handle h;
-    mmu_init(&h, cfg, im_alloc, im_free);
+    mmu_init(h, cfg, im_alloc, im_free);
 
 
     mmu_pg_cfg device_cfg = mmu_pg_cfg_new(1, MMU_AP_EL0_NONE_EL1_RW, 0, false, 1, 0, 0, 0);
-    mmu_map(&h, 0, 0, MEM_GiB, device_cfg, NULL);
+    mmu_map(h, 0, 0, MEM_GiB, device_cfg, NULL);
 
     mmu_pg_cfg mem_cfg = mmu_pg_cfg_new(0, MMU_AP_EL0_NONE_EL1_RW, 0, false, 1, 0, 0, 0);
-    mmu_map(&h, MEM_GiB, MEM_GiB, 4 * MEM_GiB, mem_cfg, NULL);
+    mmu_map(h, MEM_GiB, MEM_GiB, 4 * MEM_GiB, mem_cfg, NULL);
 
 
-    cfg.enable = true;
-    cfg.d_cache = true;
-    cfg.i_cache = true;
-    cfg.align_trap = false;
-    mmu_reconfig(&h, cfg, NULL, NULL);
-
-    return h;
+    mmu_activate();
 }

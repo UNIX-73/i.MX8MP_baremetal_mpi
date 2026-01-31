@@ -3,4 +3,4 @@
 #include "arm/mmu/mmu.h"
 
 
-mmu_handle early_identity_mapping();
+void early_identity_mapping(mmu_handle* h);

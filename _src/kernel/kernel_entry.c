@@ -33,8 +33,11 @@ _Noreturn void kernel_entry()
         kernel_init();
         uart_puts(&UART2_DRIVER, "\x1B[2J\x1B[H"); // clear screen
 
-        mm_early_init();
-        mm_init();
+
+        mmu_handle h;
+        mm_early_init(&h);
+        mm_init(&h);
+
 
         uart_puts(&UART2_DRIVER, "DONE");
     }

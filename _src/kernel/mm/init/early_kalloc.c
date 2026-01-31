@@ -15,6 +15,7 @@
 
 #include "../mm_info.h"
 
+
 #define MEMBLOCK_SIZE MMU_GRANULARITY_4KB
 
 
@@ -22,7 +23,7 @@ _Alignas(16) static spinlock_t early_kallock_lock_;
 
 
 _Alignas(16) static size_t memblock_struct_count_;
-_Alignas(16) static memblock* next_memblock_;
+_Alignas(16) static volatile memblock* next_memblock_;
 _Alignas(16) static memblock* memblocks_start_;
 
 _Alignas(16) static uintptr current_phys_;

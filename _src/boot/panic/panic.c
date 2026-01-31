@@ -1,19 +1,33 @@
+#include "boot/panic.h"
+
 #include <arm/cpu.h>
 #include <arm/exceptions/exceptions.h>
 #include <arm/sysregs/sysregs.h>
-#include <boot/panic.h>
 #include <drivers/uart/uart.h>
 #include <kernel/devices/drivers.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 #include <lib/string.h>
 
+
 #define PANIC_UART_OUTPUT &UART2_DRIVER
-static inline void PANIC_puts_(char* s)
+
+
+static void putc(char c)
 {
-    while (*s)
-        uart_putc_sync(PANIC_UART_OUTPUT, *s++);
+    uart_putc_sync(PANIC_UART_OUTPUT, c);
 }
+
+static void panic_puts_(const char* s, ...)
+{
+    va_list ap;
+    va_start(ap, s);
+
+    str_fmt_print(putc, s, ap);
+
+    va_end(ap);
+}
+
 
 #define PANIC_MESSAGE_LEN_INIT_VALUE 4096
 #define PANIC_FILE_LEN_INIT_VALUE 1024
@@ -88,18 +102,7 @@ _Noreturn void panic()
     __attribute__((unused)) volatile uint64 GDB_spsr = _ARM_SPSR_EL1();
 #endif
 
-    char buf[200];
-
-
-    uint64 coreid = ARM_get_cpu_affinity().aff0;
-
-    stdint_to_ascii((STDINT_UNION) {.uint64 = coreid}, STDINT_UINT64, buf, 200,
-                    STDINT_BASE_REPR_DEC);
-
-    PANIC_puts_("\n\r[PANIC!]\n\rCore: ");
-    PANIC_puts_(buf);
-    PANIC_puts_("\n\r");
-
+    panic_puts_("\n\r[PANIC!]\n\rCore: %p\n\r", ARM_get_cpu_affinity().aff0);
 
     char* panic_reason_str = "INVALID";
     switch (PANIC_REASON) {
@@ -117,24 +120,15 @@ _Noreturn void panic()
             break;
     }
 
-    PANIC_puts_("\n\rPanic reason:\t");
-    PANIC_puts_(panic_reason_str);
+    panic_puts_("\n\rPanic reason:\t%s"
+                "\n\rPanic message:\t%s"
+                "\n\rPanic file:\t%s at line %d",
+                panic_reason_str, PANIC_MESSAGE_BUF_PTR, PANIC_FILE_BUF_PTR, PANIC_LINE);
 
-    PANIC_puts_("\n\rPanic message:\t");
-    PANIC_puts_((char*)PANIC_MESSAGE_BUF_PTR);
 
-    PANIC_puts_("\n\rPanic file:\t");
-    PANIC_puts_((char*)PANIC_FILE_BUF_PTR);
-    PANIC_puts_(" at line ");
+    if (PANIC_COL != 0)
+        panic_puts_(":%d", PANIC_COL);
 
-    PANIC_puts_(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_LINE}, STDINT_UINT32, buf, 200,
-                                STDINT_BASE_REPR_DEC));
-
-    if (PANIC_COL != 0) {
-        PANIC_puts_(":");
-        PANIC_puts_(stdint_to_ascii((STDINT_UNION) {.uint32 = PANIC_COL}, STDINT_UINT32, buf, 200,
-                                    STDINT_BASE_REPR_DEC));
-    }
 
     log_system_info_();
 
@@ -159,22 +153,15 @@ static void log_system_info_()
 {
     ARM_exception_status status = ARM_exceptions_get_status();
 
-    PANIC_puts_("\n\rExceptions state:\n\r");
+    panic_puts_("\n\rExceptions state:\n\r");
 
     char* enabled = "enabled\n\r";
     char* disabled = "disabled\n\r";
 
-    PANIC_puts_("\tFIQ:    ");
-    PANIC_puts_(status.fiq ? enabled : disabled);
-
-    PANIC_puts_("\tIRQ:    ");
-    PANIC_puts_(status.irq ? enabled : disabled);
-
-    PANIC_puts_("\tSError: ");
-    PANIC_puts_(status.serror ? enabled : disabled);
-
-    PANIC_puts_("\tDebug:  ");
-    PANIC_puts_(status.debug ? enabled : disabled);
+    panic_puts_("\tFIQ:\t%s", status.fiq ? enabled : disabled);
+    panic_puts_("\tIRQ:\t%s", status.irq ? enabled : disabled);
+    panic_puts_("\tSError:\t%s", status.serror ? enabled : disabled);
+    panic_puts_("\tDebug:\t%s", status.debug ? enabled : disabled);
 
     // TODO: log registers
 
@@ -209,7 +196,7 @@ static void log_exception_info_()
 
     switch (current_el) {
         case 3:
-            PANIC_puts_("\n\rException info (EL3)!\n\r");
+            panic_puts_("\n\rException info (EL3)!\n\r");
             return;
         case 2:
             esr = _ARM_ESR_EL2();
@@ -217,7 +204,7 @@ static void log_exception_info_()
             far = _ARM_FAR_EL2();
             spsr = _ARM_SPSR_EL2();
 
-            PANIC_puts_("\n\rException info (EL2):\n\r");
+            panic_puts_("\n\rException info (EL2):\n\r");
             break;
         case 1:
             esr = _ARM_ESR_EL1();
@@ -225,13 +212,13 @@ static void log_exception_info_()
             far = _ARM_FAR_EL1();
             spsr = _ARM_SPSR_EL1();
 
-            PANIC_puts_("\n\rException info (EL1):\n\r");
+            panic_puts_("\n\rException info (EL1):\n\r");
             break;
         case 0:
-            PANIC_puts_("\n\rException info (EL0)!\n\r");
+            panic_puts_("\n\rException info (EL0)!\n\r");
             return;
         default:
-            PANIC_puts_("\n\rERROR: log_exception_info\n\r");
+            panic_puts_("\n\rERROR: log_exception_info\n\r");
             return;
     }
 
@@ -247,19 +234,19 @@ static void log_exception_info_()
     for (size_t i = 0; i < 4; i++) {
         char* fmt_value = stdint_to_ascii((STDINT_UNION) {.uint64 = values[i]}, STDINT_UINT64, buf,
                                           200, STDINT_BASE_REPR_HEX);
-        PANIC_puts_("\t");
-        PANIC_puts_(exception_reg_names_[i]);
-        PANIC_puts_("_");
-        PANIC_puts_(el_names_[current_el]);
-        PANIC_puts_(": ");
-        PANIC_puts_(fmt_value);
-        PANIC_puts_("\n\r");
+        panic_puts_("\t");
+        panic_puts_(exception_reg_names_[i]);
+        panic_puts_("_");
+        panic_puts_(el_names_[current_el]);
+        panic_puts_(": ");
+        panic_puts_(fmt_value);
+        panic_puts_("\n\r");
     }
 }
 
 static void log_registers_()
 {
-    PANIC_puts_("Register info:\r\n");
+    panic_puts_("Register info:\r\n");
     char reg_n[8];
     char reg_v[24];
 
@@ -273,14 +260,14 @@ static void log_registers_()
                         STDINT_BASE_REPR_HEX);
 
         if (i != 31) { // Gpr
-            PANIC_puts_("\tx");
-            PANIC_puts_(reg_n);
-            PANIC_puts_(": ");
+            panic_puts_("\tx");
+            panic_puts_(reg_n);
+            panic_puts_(": ");
         }
         else // sp
-            PANIC_puts_("\tsp: ");
+            panic_puts_("\tsp: ");
 
-        PANIC_puts_(reg_v);
-        PANIC_puts_("\n\r");
+        panic_puts_(reg_v);
+        panic_puts_("\n\r");
     }
 }

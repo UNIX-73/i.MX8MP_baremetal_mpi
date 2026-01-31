@@ -3,13 +3,13 @@
 
 #include "../mm_info.h"
 #include "../phys/page_allocator.h"
-#include "../phys/tests.h"
+#include "../reloc/reloc.h"
 #include "arm/mmu/mmu.h"
 #include "early_kalloc.h"
 #include "identity_mapping.h"
 #include "kernel/mm/mm.h"
-#include "lib/mem.h"
 #include "lib/unit/mem.h"
+
 
 static void early_reserve_device_and_kernel_mem()
 {
@@ -31,7 +31,7 @@ static void early_reserve_device_and_kernel_mem()
 }
 
 
-void mm_early_init()
+void mm_early_init(mmu_handle* mmu_identity_mapping)
 {
     mm_info_init();
 
@@ -39,11 +39,11 @@ void mm_early_init()
 
     early_reserve_device_and_kernel_mem();
 
-    mmu_handle mmu_im = early_identity_mapping();
+    early_identity_mapping(mmu_identity_mapping);
 
 #ifdef DEBUG
     uart_puts(&UART2_DRIVER, "Identity mapping mmu: \n\r");
-    mmu_debug_dump(&mmu_im, MMU_TBL_LO);
+    mmu_debug_dump(mmu_identity_mapping, MMU_TBL_LO);
 
     uart_puts(&UART2_DRIVER, "\n\rPage allocator test: \n\r");
 #endif
@@ -52,7 +52,7 @@ void mm_early_init()
 }
 
 
-void mm_init()
+void mm_init(mmu_handle* mmu_identity_mapping)
 {
     memblock* mblcks;
     size_t n;
@@ -62,4 +62,6 @@ void mm_init()
 #ifdef DEBUG
     page_allocator_debug();
 #endif
+
+    mm_reloc_kernel(KERNEL_BASE, mmu_identity_mapping);
 }

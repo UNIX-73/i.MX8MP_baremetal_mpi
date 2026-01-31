@@ -6,25 +6,30 @@
 
 static inline uint32 log2_floor_u32(uint32 x)
 {
-    uint32 r = 0;
-    while (x >>= 1)
-        r++;
-    return r;
+    return x ? 31u - __builtin_clz(x) : 0;
 }
-
 
 static inline uint64 log2_floor_u64(uint64 x)
 {
-    uint64 r = 0;
-    while (x >>= 1)
-        r++;
-    return r;
+    return x ? 63u - __builtin_clzll(x) : 0;
 }
 
-static inline uint64 power_of2(uint64 x)
+static inline uint32 log2_ceil_u32(uint32 x)
 {
-    return 1ULL << x;
+    return x <= 1 ? 0 : 32u - __builtin_clz(x - 1);
 }
+
+static inline uint64 log2_ceil_u64(uint64 x)
+{
+    return x <= 1 ? 0 : 64u - __builtin_clzll(x - 1);
+}
+
+#define log2_floor(x) _Generic((x), uint32: log2_floor_u32, uint64: log2_floor_u64)(x)
+#define log2_ceil(x) \
+    _Generic((x), uint32: log2_ceil_u32, uint64: log2_ceil_u64, size_t: log2_ceil_u64)(x)
+
+
+#define power_of2(x) ((x) < 64 ? (1ULL << (x)) : 0)
 
 
 static inline uint64 square(uint64 x)
@@ -53,7 +58,7 @@ static inline uint64 div_round_up(uint64 a, uint64 b)
 
 static inline bool is_pow2(uint64 x)
 {
-    return (x & (x - 1)) == 0;
+    return x && ((x & (x - 1)) == 0);
 }
 
 
@@ -68,3 +73,5 @@ static inline uint64 next_pow2_u64(uint64 x)
 {
     return x <= 1 ? 1ull : 1ull << (64 - __builtin_clzll(x - 1));
 }
+
+#define next_pow2(x) _Generic((x), uint32: next_pow2_u32, uint64: next_pow2_u64)(x)

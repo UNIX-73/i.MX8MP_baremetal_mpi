@@ -35,18 +35,38 @@ void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free)
     mmu_apply(h);
 }
 
+
+void mmu_activate()
+{
+    uint64 sctlr = _mmu_get_SCTLR_EL1();
+    sctlr |= 0b1ULL;
+    _mmu_set_SCTLR_EL1(sctlr);
+}
+
+
+void mmu_deactivate()
+{
+    uint64 sctlr = _mmu_get_SCTLR_EL1();
+    sctlr &= ~(0b1ULL);
+    _mmu_set_SCTLR_EL1(sctlr);
+}
+
+
+bool mmu_is_active()
+{
+    return (bool)(_mmu_get_SCTLR_EL1() & 0b1);
+}
+
+
 mmu_cfg mmu_get_cfg(mmu_handle* h)
 {
     return h->cfg_;
 }
 
-void mmu_reconfig(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free)
+void mmu_reconfig_allocators(mmu_handle* h, mmu_alloc alloc, mmu_free free)
 {
     h->alloc_ = alloc == NULL ? h->alloc_ : alloc;
     h->free_ = free == NULL ? h->free_ : free;
-    h->cfg_ = cfg;
-
-    mmu_apply(h); // is already locked
 }
 
 
@@ -66,13 +86,34 @@ mmu_pg_cfg mmu_pg_cfg_new(uint8 attr_index, mmu_access_permission ap, uint8 shar
 }
 
 
-static void UNLOCKED_free_subtree(mmu_handle* h, mmu_tbl tbl, mmu_op_info* info)
+void mmu_cfg_new(mmu_cfg* out, bool d_cache, bool i_cache, bool align_trap, bool hi_enable,
+                 bool lo_enable, uint8 hi_va_addr_bits, uint8 lo_va_addr_bits,
+                 mmu_granularity hi_gran, mmu_granularity lo_gran)
 {
-    mmu_granularity g = h->cfg_.lo_gran;
+    if (!out) {
+        return;
+    }
 
+    out->d_cache = d_cache;
+    out->i_cache = i_cache;
+    out->align_trap = align_trap;
+
+    out->hi_enable = hi_enable;
+    out->lo_enable = lo_enable;
+
+    out->hi_va_addr_bits = hi_va_addr_bits;
+    out->lo_va_addr_bits = lo_va_addr_bits;
+
+    out->hi_gran = hi_gran;
+    out->lo_gran = lo_gran;
+}
+
+
+static void UNLOCKED_free_subtree(mmu_handle* h, mmu_tbl tbl, mmu_granularity g, mmu_op_info* info)
+{
     for (size_t i = 0; i < tbl_entries(g); i++)
         if (pd_get_valid(tbl.pds[i]) && pd_get_type(tbl.pds[i]) == MMU_PD_TABLE)
-            UNLOCKED_free_subtree(h, tbl_from_td(tbl.pds[i], g), info);
+            UNLOCKED_free_subtree(h, tbl_from_td(tbl.pds[i], g), g, info);
 
 
     h->free_(tbl.pds);
@@ -116,31 +157,26 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t 
         return true;
 
 
-    mmu_granularity g = h->cfg_.lo_gran;
-    mmu_tbl tbl0 = tbl0_from_handle(h);
     mmu_alloc alloc = h->alloc_;
 
     mmu_tbl_level target_lvl;
     size_t cover;
 
-    if (size % g != 0 || virt % g != 0 || phys % g != 0)
-        return false;
-
 
     while (size > 0) {
+        size_t i;
+        mmu_granularity g;
+        mmu_tbl tbl = get_first_tbl(h, virt, &g);
+
+        ASSERT(size % g == 0 || virt % g == 0 || phys % g == 0);
+
         get_target_lvl(&target_lvl, &cover, size, g, virt, phys);
 
-
-        DEBUG_ASSERT(size % g == 0 || virt % g == 0 || phys % g == 0);
         DEBUG_ASSERT(virt % cover == 0);
         DEBUG_ASSERT(phys % cover == 0);
 
 
         // the main loop of the fn, finds the actual table of the target level
-
-        size_t i;
-        mmu_tbl tbl = tbl0;
-
         for (mmu_tbl_level l = MMU_TBL_LV0; l < target_lvl; l++) {
             i = table_index(virt, g, l);
 
@@ -161,7 +197,7 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t 
 
             switch (pd_get_type(pd)) {
                 case MMU_PD_BLOCK:
-                    tbl = split_block(h, tbl, i, l, info);
+                    tbl = split_block(h, tbl, g, i, l, info);
                     continue;
                 case MMU_PD_TABLE:
                     tbl = tbl_from_ptr(pd_get_output_address(pd, g), g);
@@ -180,7 +216,7 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t 
 
         // if it was a table, free it (and all the subtables)
         if (pd_get_valid(old) && pd_get_type(old) == MMU_PD_TABLE)
-            UNLOCKED_free_subtree(h, tbl_from_td(old, g), info);
+            UNLOCKED_free_subtree(h, tbl_from_td(old, g), g, info);
 
 
         size -= cover;
@@ -230,20 +266,18 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr virt, size_t size, mmu_op_info* in
     if (size == 0)
         return true;
 
-    mmu_granularity g = h->cfg_.lo_gran;
-    mmu_tbl tbl0 = tbl0_from_handle(h);
-    mmu_tbl tbl = tbl0;
-
-    mmu_tbl_level l, target_lvl;
     size_t cover;
     size_t i;
-
-    if (size % g != 0 || virt % g != 0)
-        return false;
-
+    mmu_granularity g;
 
     while (size > 0) {
-        tbl = tbl0;
+        mmu_tbl tbl = get_first_tbl(h, virt, &g);
+
+        mmu_tbl_level l, target_lvl;
+
+
+        if (size % g != 0 || virt % g != 0)
+            return false;
 
         get_target_lvl(&target_lvl, &cover, size, g, virt, 0);
 
@@ -268,7 +302,7 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr virt, size_t size, mmu_op_info* in
 
             switch (pd_get_type(pd)) {
                 case MMU_PD_BLOCK:
-                    tbl = split_block(h, tbl, i, l, info);
+                    tbl = split_block(h, tbl, g, i, l, info);
                     continue;
                 case MMU_PD_TABLE:
                     tbl = tbl_from_td(pd, g);
@@ -293,7 +327,7 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr virt, size_t size, mmu_op_info* in
 
         // if it was a table, free it (and all the subtables)
         if (pd_get_type(old) == MMU_PD_TABLE && pd_get_valid(old))
-            UNLOCKED_free_subtree(h, tbl_from_td(old, g), info);
+            UNLOCKED_free_subtree(h, tbl_from_td(old, g), g, info);
 
         size -= cover;
         virt += cover;
@@ -376,8 +410,8 @@ static inline bool mmu_supports_16kb_(uint64 id_aa64mmfr0)
 static void mmu_apply(mmu_handle* h)
 {
     mmu_granularity g[2] = {h->cfg_.lo_gran, h->cfg_.hi_gran};
-    mmu_tbl tbl0 = tbl0_from_handle(h);
-    mmu_tbl tbl1 = tbl1_from_handle(h);
+    mmu_tbl tbl0 = ttbr0_from_handle(h);
+    mmu_tbl tbl1 = ttbr1_from_handle(h);
 
 
     ASSERT(tbl0.pds && tbl1.pds);
@@ -405,8 +439,22 @@ static void mmu_apply(mmu_handle* h)
                     PANIC("Unknown MMU granularity");
             }
 
+
+        // Disable mmu (required for reconfiguration)
+        uint64 sctlr = _mmu_get_SCTLR_EL1();
+        sctlr &= ~(0b1ul << 0);
+        _mmu_set_SCTLR_EL1(sctlr);
+
+
         _mmu_set_TTBR0_EL1((uintptr)tbl0.pds);
         _mmu_set_TTBR1_EL1((uintptr)tbl1.pds);
         mmu_apply_cfg(h->cfg_);
     }
+}
+
+
+void mmu_destroy(mmu_handle* h, mmu_op_info* info)
+{
+    UNLOCKED_free_subtree(h, ttbr0_from_handle(h), h->cfg_.lo_gran, info);
+    UNLOCKED_free_subtree(h, ttbr1_from_handle(h), h->cfg_.hi_gran, info);
 }
