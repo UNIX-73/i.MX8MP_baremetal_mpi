@@ -31,37 +31,41 @@ static void early_reserve_device_and_kernel_mem()
 }
 
 
-void mm_early_init(mmu_handle* mmu_identity_mapping)
+void mm_early_init()
 {
     mm_info_init();
 
-    early_kalloc_init();
 
+    // init early kalloc
+    early_kalloc_init();
     early_reserve_device_and_kernel_mem();
 
-    early_identity_mapping(mmu_identity_mapping);
 
+    // init identity mapping
+    early_identity_mapping(&mm_mmu_h);
 #ifdef DEBUG
     uart_puts(&UART2_DRIVER, "Identity mapping mmu: \n\r");
-    mmu_debug_dump(mmu_identity_mapping, MMU_TBL_LO);
-
+    mmu_debug_dump(&mm_mmu_h, MMU_TBL_LO);
     uart_puts(&UART2_DRIVER, "\n\rPage allocator test: \n\r");
 #endif
 
-    page_allocator_init();
-}
 
-
-void mm_init(mmu_handle* mmu_identity_mapping)
-{
+    // init page allocator
     memblock* mblcks;
     size_t n;
+    page_allocator_init();
     early_kalloc_get_memblocks(&mblcks, &n);
-
     page_allocator_reserve_memblocks(mblcks, n);
 #ifdef DEBUG
     page_allocator_debug();
 #endif
 
-    mm_reloc_kernel(KERNEL_BASE, mmu_identity_mapping);
+
+    // reloc kernel
+    mm_reloc_kernel(KERNEL_BASE, &mm_mmu_h);
+}
+
+
+void mm_init()
+{
 }

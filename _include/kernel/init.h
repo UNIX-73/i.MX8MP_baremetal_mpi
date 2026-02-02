@@ -23,4 +23,6 @@ typedef enum {
 #define KERNEL_INITCALL(fn, KERNEL_INITCALL_STAGE) \
 	SET_##KERNEL_INITCALL_STAGE(fn)
 
+
+void kernel_early_init(void);
 void kernel_init(void);

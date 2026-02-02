@@ -1,22 +1,20 @@
-
 #include "panic_puts.h"
 
 #include <lib/stdarg.h>
 #include <lib/string.h>
 
-#include "drivers/uart/uart.h"
-#include "kernel/devices/drivers.h"
-
-
-#define PANIC_UART_OUTPUT UART2_DRIVER
+#include "kernel/io/term.h"
 
 
 static void panic_putc_colored(char c)
 {
-    uart_putc_sync(&PANIC_UART_OUTPUT, c);
+    term_printc(c);
 
     if (c == '\n') {
-        uart_puts_sync(&PANIC_UART_OUTPUT, "\r" ANSI_ERASE_LINE);
+        const char* str = "\r" ANSI_ERASE_LINE;
+
+        while (*str)
+            term_printc(*str++);
     }
 }
 

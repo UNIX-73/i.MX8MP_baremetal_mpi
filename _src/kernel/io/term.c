@@ -1,0 +1,140 @@
+#include "kernel/io/term.h"
+
+#include <lib/branch.h>
+#include <lib/lock/spinlock_irq.h>
+#include <lib/stdarg.h>
+#include <lib/stdmacros.h>
+#include <lib/string.h>
+
+#include "kernel/panic.h"
+
+// TODO: needs handling in case of TERM_OUT_RES_NOT_TAKEN results
+
+typedef enum {
+    TERM_UNINIT = 0,
+    TERM_EARLY_MODE,
+    TERM_FULL_MODE,
+} term_early;
+
+
+static term_early mode;
+static term_out early_output;
+static spinlock_t lock;
+
+
+void init_term_early(term_out early_out)
+{
+    mode = TERM_EARLY_MODE;
+    early_output = early_out;
+
+    spinlock_init(&lock);
+
+    term_prints("\x1B[2J\x1B[H"); // clear screen
+
+#ifdef DEBUG
+    term_prints("[term_early]: initialized\n\r");
+#endif
+}
+
+
+void init_term_full()
+{
+    spinlock_init(&lock);
+
+    mode = TERM_FULL_MODE;
+
+    PANIC("TODO: implement it");
+}
+
+
+void term_add_output(term_out out);
+void term_remove_output(term_out out);
+
+void term_add_input(term_in in);
+void term_remove_input(term_in in);
+
+
+/*
+    Prints
+*/
+static inline term_out get_term_out()
+{
+    switch (mode) {
+        case TERM_UNINIT:
+            goto hang;
+        case TERM_EARLY_MODE:
+            if (UNLIKELY(!early_output))
+                goto hang;
+
+            return early_output;
+        case TERM_FULL_MODE:
+            // TODO: implement full mode
+            goto hang;
+        default:
+            goto hang;
+    }
+
+    loop hang : asm volatile("wfi");
+}
+
+
+void term_printc(const char c)
+{
+    irqlock_t flags = spin_lock_irqsave(&lock);
+    get_term_out()(c);
+    spin_unlock_irqrestore(&lock, flags);
+}
+
+void term_prints(const char* s)
+{
+    irqlock_t flags = spin_lock_irqsave(&lock);
+
+    term_out out = get_term_out();
+
+    while (*s)
+        out(*s++);
+
+    spin_unlock_irqrestore(&lock, flags);
+}
+
+
+// TODO: allow variable formatting with allocations etc.
+
+static char fmt_buf[4096];
+static size_t fmt_i;
+
+static void putfmt(char c)
+{
+    fmt_buf[fmt_i++] = c;
+
+    ASSERT(fmt_i < 4096);
+}
+
+
+/// The formatting happens before the printing because in future versions checking the result of the
+/// term_out will be needed and that cannot happen inside the fmt fn. This fn will need a big remake
+/// when kmalloc is implemented TODO:
+void term_printf(const char* s, ...)
+{
+    va_list ap;
+    va_start(ap, s);
+
+    irqlock_t flags = spin_lock_irqsave(&lock);
+    fmt_i = 0;
+
+
+    str_fmt_print(putfmt, s, ap);
+
+
+    term_out out = get_term_out();
+
+    s = fmt_buf;
+    while (*s)
+        out(*s++);
+
+
+    fmt_i = 0;
+    spin_unlock_irqrestore(&lock, flags);
+
+    va_end(ap);
+}

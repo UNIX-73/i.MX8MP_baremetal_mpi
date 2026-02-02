@@ -13,7 +13,9 @@
 
 #include "arm/cpu.h"
 #include "arm/mmu/mmu.h"
+#include "devices/device_map.h"
 #include "kernel/devices/drivers.h"
+#include "kernel/io/term.h"
 #include "kernel/mm.h"
 #include "lib/unit/mem.h"
 
@@ -24,11 +26,10 @@ _Noreturn void kernel_entry()
 {
     size_t coreid = ARM_get_cpu_affinity().aff0;
 
+
     if (coreid == 0) {
         if (!mm_kernel_is_relocated()) {
-            uart_puts_sync(&UART2_DRIVER, "\x1B[2J\x1B[H"); // clear screen
-            mm_early_init(&h);
-            mm_init(&h);
+            kernel_early_init();
         }
         else {
             kernel_init();

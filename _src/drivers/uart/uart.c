@@ -6,6 +6,14 @@
 
 #include "lib/lock/irqlock.h"
 #include "lib/lock/spinlock_irq.h"
+#include "lib/mem.h"
+#include "lib/stdmacros.h"
+
+
+#define ASSERT_FULL_MODE()                                                                   \
+    DEBUG_ASSERT(uart_get_state_(h)->mode == UART_MODE_FULL,                                 \
+                 "uart_driver: attempted to use feature of the full initialization without " \
+                 "initizalizing it into full mode")
 
 
 // Rust fns (driver buffer control)
@@ -17,10 +25,10 @@ extern bool uart_rxbuf_pop(const driver_handle* h, uint8* v);
 
 // Saves which irqs are enabled or disabled, each bitfield represents each
 // UART_ID
-static const uint8 USR1_IRQ_W1C_BITS_[9] = {
+const uint8 USR1_IRQ_W1C_BITS_[9] = {
     3, 4, 5, 7, 8, 10, 11, 12, 15,
 };
-static const uint8 USR2_IRQ_W2C_BITS_[8] = {
+const uint8 USR2_IRQ_W2C_BITS_[8] = {
     1, 2, 4, 7, 8, 11, 12, 15,
 };
 
@@ -41,6 +49,18 @@ static inline bool UART_tx_fifo_full_(uintptr base)
     UartUtsValue uts = UART_UTS_read(base);
     return UART_UTS_TXFULL_get(uts);
 }
+
+
+uart_mode uart_get_mode(const driver_handle* h)
+{
+    uart_mode m = uart_get_state_(h)->mode;
+    
+    if (!(m == UART_MODE_EARLY || m == UART_MODE_FULL))
+        loop;
+
+    return m;
+}
+
 
 void uart_reset(const driver_handle* h)
 {
@@ -79,6 +99,8 @@ void uart_reset(const driver_handle* h)
 
 bool uart_read(const driver_handle* h, uint8* data)
 {
+    ASSERT_FULL_MODE();
+
     bool new_data;
 
     irq_spinlocked(&uart_get_state_(h)->rx_lock)
@@ -268,7 +290,7 @@ static inline bool uart_get_irq_state_(const driver_handle* h, UART_IRQ_SOURCE i
     return (bool)BITFIELD32_GET(irq_status, irq);
 }
 
-bitfield32 uart_get_irq_sources(const driver_handle* h)
+static bitfield32 uart_get_irq_sources(const driver_handle* h)
 {
 #ifdef TEST
     uart_check_handle_(h);
@@ -318,7 +340,7 @@ bitfield32 uart_get_irq_sources(const driver_handle* h)
 
 // Handlers
 typedef void (*uart_irq_handler_t)(const driver_handle* h);
-void unhandled_irq_source(const driver_handle*)
+static void unhandled_irq_source(const driver_handle*)
 {
     PANIC("unhandled");
 }
@@ -384,6 +406,8 @@ void uart_handle_irq(const driver_handle* h)
 {
     irqlocked() // TODO: check if needed the lock
     {
+        ASSERT_FULL_MODE();
+
         bitfield32 source = uart_get_irq_sources(h);
 
         for (size_t i = UART_IRQ_SRC_START; i < UART_IRQ_SRC_COUNT; i++) {
@@ -405,6 +429,8 @@ void UART_init_stage0(const driver_handle* h)
 #ifdef TEST
     uart_check_handle_(h);
 #endif
+    uart_get_state_(h)->mode = UART_MODE_FULL;
+
 
     uart_reset(h);
 
@@ -431,7 +457,7 @@ void UART_init_stage0(const driver_handle* h)
     UART_UCR3_write(base, ucr3);
 
     UartUcr4Value ucr4 = {0};
-    UART_UCR4_CTSTL_set(&ucr4, 31);
+    UART_UCR4_CTSTL_set(&ucr4, 32);
     UART_UCR4_write(base, ucr4);
 
     UartUfcrValue ufcr = {0};     // 0000 1010 0000 0001
@@ -498,10 +524,12 @@ static inline void UNLOCKED_putc_sync_(const driver_handle* h, const uint8 c)
 }
 
 
-void uart_putc_sync(const driver_handle* h, const uint8 c)
+void uart_putc_sync(const driver_handle* h, const char c)
 {
     irq_spinlocked(&uart_get_state_(h)->tx_lock)
     {
+        ASSERT_FULL_MODE();
+
         UNLOCKED_putc_sync_(h, c);
     }
 }
@@ -513,6 +541,8 @@ void uart_puts_sync(const driver_handle* h, const char* s)
 
     irq_spinlocked(&uart_get_state_(h)->tx_lock)
     {
+        ASSERT_FULL_MODE();
+
         while (*s)
             UNLOCKED_putc_sync_(h, *s++);
     }
@@ -531,10 +561,12 @@ static inline void UNLOCKED_putc_(const driver_handle* h, const uint8 c)
         uart_set_irq_state_(h, UART_IRQ_SRC_TRDY, true);
 }
 
-void uart_putc(const driver_handle* h, const uint8 c)
+void uart_putc(const driver_handle* h, const char c)
 {
     irq_spinlocked(&uart_get_state_(h)->tx_lock)
     {
+        ASSERT_FULL_MODE();
+
         UNLOCKED_putc_(h, c);
     }
 }
@@ -546,7 +578,96 @@ void uart_puts(const driver_handle* h, const char* s)
 
     irq_spinlocked(&uart_get_state_(h)->tx_lock)
     {
+        ASSERT_FULL_MODE();
+
         while (*s)
             UNLOCKED_putc_(h, *s++);
     }
+}
+
+
+/*
+    Uart early
+*/
+
+
+void uart_early_init(const driver_handle* h, p_uintptr base)
+{
+    uart_state* s = uart_get_state_(h);
+    s->mode = UART_MODE_EARLY;
+    s->early_base = base;
+
+
+    // software reset
+    UART_UCR2_write(base, (UartUcr2Value) {.val = 0});
+    while (!(UART_UCR2_read(base).val & 1))
+        asm volatile("nop");
+
+
+    UartUcr1Value ucr1 = {0};
+    UART_UCR1_UARTEN_set(&ucr1, true);
+    UART_UCR1_write(base, ucr1);
+
+    UartUcr2Value ucr2 = {0};
+    UART_UCR2_SRST_set(&ucr2, true);
+    UART_UCR2_TXEN_set(&ucr2, true);
+    UART_UCR2_WS_set(&ucr2, true);
+    UART_UCR2_IRTS_set(&ucr2, true);
+    UART_UCR2_write(base, ucr2);
+
+    UartUcr3Value ucr3 = {0};
+    UART_UCR3_RXDMUXSEL_set(&ucr3, true);
+    UART_UCR3_write(base, ucr3);
+
+    UartUcr4Value ucr4 = {0};
+    UART_UCR4_CTSTL_set(&ucr4, 32);
+    UART_UCR4_write(base, ucr4);
+
+    UartUfcrValue ufcr = {0};     // 0000 1010 0000 0001
+    UART_UFCR_RXTL_set(&ufcr, 0); // RX fifo threshold interrupt 1
+    UART_UFCR_TXTL_set(&ufcr, 0); // TX fifo threshold interrupt 4
+    UART_UFCR_DCEDTE_set(&ufcr, false);
+    UART_UFCR_RFDIV_set(&ufcr, UART_UFCR_RFDIV_DIV_BY_2);
+    UART_UFCR_write(base, ufcr);
+
+    UartUbirValue ubir = {0};
+    UART_UBIR_INC_set(&ubir, 0xF);
+    UART_UBIR_write(base, ubir);
+
+    UartUbmrValue ubmr = {0};
+    UART_UBMR_MOD_set(&ubmr, 0x68);
+    UART_UBMR_write(base, ubmr);
+
+    UartUmcrValue umcr = {0};
+    UART_UMCR_write(base, umcr);
+
+    uint32 usr1_v = 0;
+    for (size_t i = 0; i < 9; i++)
+        usr1_v |= (0b1 << USR1_IRQ_W1C_BITS_[i]);
+
+    uint32 usr2_v = 0;
+    for (size_t i = 0; i < 8; i++)
+        usr2_v |= (0b1 << USR2_IRQ_W2C_BITS_[i]);
+
+    UART_USR1_write(base, (UartUsr1Value) {.val = usr1_v});
+    UART_USR2_write(base, (UartUsr2Value) {.val = usr2_v});
+}
+
+
+void uart_putc_early(const driver_handle* h, const char c)
+{
+    uintptr base = uart_get_state_(h)->early_base;
+
+    while (UART_tx_fifo_full_(base))
+        for (size_t i = 0; i < 5000; i++)
+            asm volatile("nop");
+
+    UART_UTXD_write(base, c);
+}
+
+
+void uart_puts_early(const driver_handle* h, const char* s)
+{
+    while (*s)
+        uart_putc_early(h, *s++);
 }

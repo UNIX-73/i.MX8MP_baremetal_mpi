@@ -25,6 +25,8 @@ KERNEL_INITCALL(rust_kernel_initcalls_stage2, KERNEL_INITCALL_STAGE2);
 
 void kernel_init(void)
 {
+
+
     // Stage 0 (pre irq initialization)
     for (kernel_initcall_t* fn = __kernel_init_stage0_start; fn < __kernel_init_stage0_end; fn++) {
         (*fn)();

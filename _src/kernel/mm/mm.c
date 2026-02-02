@@ -1,11 +1,16 @@
 #include "kernel/mm.h"
 
+#include <arm/mmu/mmu.h>
 #include <frdm_imx8mp.h>
 #include <kernel/panic.h>
 #include <lib/stdint.h>
 
 
 extern uintptr _get_pc(void);
+
+
+mmu_handle mm_mmu_h;
+
 
 bool mm_kernel_is_relocated()
 {

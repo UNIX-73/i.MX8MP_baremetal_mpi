@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef DRIVERS
-#error "This header should only be imported by a driver"
+#    error "This header should only be imported by a driver"
 #endif
 
 #include <drivers/uart/raw/uart_onems.h>
@@ -21,3 +21,7 @@
 #include <drivers/uart/raw/uart_utim.h>
 #include <drivers/uart/raw/uart_uts.h>
 #include <drivers/uart/raw/uart_utxd.h>
+
+
+extern const uint8 USR1_IRQ_W1C_BITS_[9];
+extern const uint8 USR2_IRQ_W2C_BITS_[8];
