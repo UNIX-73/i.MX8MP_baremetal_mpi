@@ -1,9 +1,10 @@
 #include "arm/mmu/mmu.h"
 #include "kernel/io/term.h"
+#include "kernel/panic.h"
 #include "lib/stdmacros.h"
 #include "lib/string.h"
+#include "mmu_dc.h"
 #include "mmu_helpers.h"
-#include "mmu_pd.h"
 #include "mmu_types.h"
 
 // TESTING, llm assisted
@@ -43,12 +44,12 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
 {
     mmu_granularity g = ttbrx == MMU_TBL_LO ? h->cfg_.lo_gran : h->cfg_.hi_gran;
     size_t entries = tbl_entries(g);
-    size_t cover = pd_cover_bytes(g, lvl);
+    size_t cover = dc_cover_bytes(g, lvl);
 
     for (size_t i = 0; i < entries; i++) {
-        mmu_hw_pd pd = tbl.pds[i];
+        mmu_hw_dc dc = tbl.dcs[i];
 
-        if (!pd_get_valid(pd))
+        if (!dc_get_valid(dc))
             continue;
 
         v_uintptr va = va_base + i * cover;
@@ -65,37 +66,51 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
         dbg_u64(ttbrx == MMU_TBL_LO ? va : va | 0xFFFF000000000000);
         dbg_puts(" -> ");
 
-        switch (pd_get_type(pd)) {
-            case MMU_PD_TABLE: {
-                p_uintptr pa = pd_get_output_address(pd, g);
+        switch (dc_get_type(dc, g, lvl)) {
+            case MMU_DESCRIPTOR_TABLE: {
+                p_uintptr pa = dc_get_output_address(dc, g);
 
                 dbg_puts("TABLE @ PA ");
                 dbg_u64(pa);
-                dbg_puts(" - pd[");
-                dbg_u64(pd.v);
+                dbg_puts(" - dc[");
+                dbg_u64(dc.v);
                 dbg_puts("]");
                 dbg_puts("\n\r");
 
-                mmu_debug_dump_tbl_(h, tbl_from_td(h, pd, g), ttbrx, lvl + 1, va, indent + 1);
+                mmu_debug_dump_tbl_(h, tbl_from_td(h, dc, g, lvl), ttbrx, lvl + 1, va, indent + 1);
                 break;
             }
 
-            case MMU_PD_BLOCK: {
-                p_uintptr pa = pd_get_output_address(pd, g);
+            case MMU_DESCRIPTOR_BLOCK: {
+                p_uintptr pa = dc_get_output_address(dc, g);
 
                 dbg_puts("BLOCK PA ");
                 dbg_u64(pa);
                 dbg_puts(" size ");
                 dbg_dec(cover);
-                dbg_puts(" - pd[");
-                dbg_u64(pd.v);
+                dbg_puts(" - dc[");
+                dbg_u64(dc.v);
+                dbg_puts("]");
+                dbg_puts("\n\r");
+                break;
+            }
+
+            case MMU_DESCRIPTOR_PAGE: {
+                p_uintptr pa = dc_get_output_address(dc, g);
+
+                dbg_puts("PAGE PA ");
+                dbg_u64(pa);
+                dbg_puts(" size ");
+                dbg_dec(cover);
+                dbg_puts(" - dc[");
+                dbg_u64(dc.v);
                 dbg_puts("]");
                 dbg_puts("\n\r");
                 break;
             }
 
             default:
-                dbg_puts("UNKNOWN\n\r");
+                dbg_puts("UNKNOWN!\n\r");
                 break;
         }
     }

@@ -6,7 +6,6 @@
 
 #include "early_kalloc.h"
 #include "kernel/mm.h"
-#include "lib/stdbool.h"
 
 
 static reserve_allocator reserve_alloc;
@@ -65,13 +64,16 @@ void reserve_malloc_fill()
         return;
 
     for (size_t i = 0; i < RESERVE_MALLOC_SIZE; i++) {
-        if (!bitfield_get(reserved_pages, i)) {
-            pv_ptr pv = reserve_alloc();
+        if (bitfield_get(reserved_pages, i))
+            break;
 
-            ASSERT(pv.pa != 0 && ptrs_are_kmapped(pv));
-            reserved_addr[i] = pv;
+        pv_ptr pv = reserve_alloc();
 
-            bitfield_set_high(reserved_pages, i);
-        }
+        ASSERT(pv.pa != 0 && ptrs_are_kmapped(pv));
+        reserved_addr[i] = pv;
+
+        bitfield_set_high(reserved_pages, i);
     }
+
+    DEBUG_ASSERT(reserved_pages == (typeof(reserved_pages))((1ULL << RESERVE_MALLOC_SIZE) - 1));
 }

@@ -17,14 +17,6 @@
 #include "mm/mm_info.h"
 
 
-pv_ptr test()
-{
-    v_uintptr va = (v_uintptr)raw_kmalloc(4096, "test");
-    p_uintptr pa = mm_kva_to_kpa(va);
-
-    return (pv_ptr) {pa, va};
-}
-
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
 _Noreturn void kernel_entry()
 {
@@ -42,13 +34,7 @@ _Noreturn void kernel_entry()
     }
 
 
-    reserve_malloc_reconfig_allocator(test);
-
-    reserve_malloc_fill();
-
-
-    __attribute((unused)) void* test = raw_kmalloc(1, "kmalloc_test");
-    reserve_malloc_fill();
+    __attribute((unused)) void* test = raw_kmalloc(1, "kmalloc_test", NULL);
 
     term_prints("prefree\n\r");
 

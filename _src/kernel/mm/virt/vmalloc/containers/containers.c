@@ -100,14 +100,14 @@ void vmalloc_node_free(vmalloc_node_container* first, vmalloc_node* node)
     /* Node freed, the next step is to watch if the container can be freed */
     if (!container_is_empty(c))
         return;
-    
+
 
     vmalloc_node_container* cur = first;
     while (cur) {
         if (cur->next == c) {
             cur->next = c->next;
 
-            raw_kfree(c);
+            raw_kfree(c, &RAW_KMALLOC_DEFAULT_CFG);
             return;
         }
 

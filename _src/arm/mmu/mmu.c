@@ -8,8 +8,8 @@
 
 #include "kernel/panic.h"
 #include "lib/lock/spinlock_irq.h"
+#include "mmu_dc.h"
 #include "mmu_helpers.h"
-#include "mmu_pd.h"
 #include "mmu_types.h"
 #include "regs/mmu_sysregs.h"
 
@@ -32,8 +32,8 @@ void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free, isize_
 
         .alloc_ = alloc,
         .free_ = free,
-        .tbl0_ = (void*)tbl0.pds,
-        .tbl1_ = (void*)tbl1.pds,
+        .tbl0_ = (void*)tbl0.dcs,
+        .tbl1_ = (void*)tbl1.dcs,
         .physmap_offset = physmap_offset,
         .cfg_ = cfg,
         .slock_ = {0},
@@ -128,14 +128,15 @@ void mmu_cfg_new(mmu_cfg* out, bool d_cache, bool i_cache, bool align_trap, bool
 }
 
 
-static void UNLOCKED_free_subtree(mmu_handle* h, mmu_tbl tbl, mmu_granularity g, mmu_op_info* info)
+static void UNLOCKED_free_subtree(mmu_handle* h, mmu_tbl tbl, mmu_granularity g, mmu_tbl_level l,
+                                  mmu_op_info* info)
 {
     for (size_t i = 0; i < tbl_entries(g); i++)
-        if (pd_get_valid(tbl.pds[i]) && pd_get_type(tbl.pds[i]) == MMU_PD_TABLE)
-            UNLOCKED_free_subtree(h, tbl_from_td(h, tbl.pds[i], g), g, info);
+        if (dc_get_valid(tbl.dcs[i]) && dc_get_type(tbl.dcs[i], g, l) == MMU_DESCRIPTOR_TABLE)
+            UNLOCKED_free_subtree(h, tbl_from_td(h, tbl.dcs[i], g, l + 1), g, l + 1, info);
 
 
-    h->free_(tbl.pds);
+    h->free_(tbl.dcs);
 
     if (info)
         info->freed_tbls++;
@@ -148,9 +149,9 @@ static inline void get_target_lvl(mmu_tbl_level* target_lvl, size_t* cover, size
     mmu_tbl_level l;
     size_t c;
     for (l = MMU_TBL_LV1; l <= max_level(g); l++) {
-        c = pd_cover_bytes(g, l);
+        c = dc_cover_bytes(g, l);
 
-        if (size >= pd_cover_bytes(g, l) && virt % c == 0 && phys % c == 0)
+        if (size >= dc_cover_bytes(g, l) && virt % c == 0 && phys % c == 0)
             break;
     }
 
@@ -199,43 +200,43 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size
         for (mmu_tbl_level l = MMU_TBL_LV0; l < target_lvl; l++) {
             i = table_index(va, g, l);
 
-            mmu_hw_pd pd = mmu_tbl_get_pd(tbl, i);
+            mmu_hw_dc dc = mmu_tbl_get_dc(tbl, i);
 
             // not valid
-            if (!pd_get_valid(pd)) {
+            if (!dc_get_valid(dc)) {
                 // --- invalid descriptor ---
                 // allocate a new table
                 mmu_tbl next = alloc_tbl(alloc, g, true, info);
 
                 // link the new allocated table in the current table level
-                tbl.pds[i] = td_build(next, g, h->physmap_offset);
+                tbl.dcs[i] = td_build(next, g, h->physmap_offset);
                 tbl = next;
 
                 continue;
             }
 
-            switch (pd_get_type(pd)) {
-                case MMU_PD_BLOCK:
+            switch (dc_get_type(dc, g, l)) {
+                case MMU_DESCRIPTOR_BLOCK:
                     tbl = split_block(h, tbl, g, i, l, info);
                     continue;
-                case MMU_PD_TABLE:
-                    tbl = tbl_from_td(h, pd, g);
+                case MMU_DESCRIPTOR_TABLE:
+                    tbl = tbl_from_td(h, dc, g, l);
                     continue;
                 default:
-                    PANIC("mmu_map: err");
+                    PANIC("mmu_map: err"); // should not be a block (l < target_lvl)
             }
         }
 
         // build the block descriptor
         i = table_index(va, g, target_lvl);
 
-        mmu_hw_pd old = mmu_tbl_get_pd(tbl, i);
+        mmu_hw_dc old = mmu_tbl_get_dc(tbl, i);
 
-        tbl.pds[i] = bd_build(cfg, pa, g);
+        tbl.dcs[i] = bd_build(cfg, pa, g, target_lvl);
 
         // if it was a table, free it (and all the subtables)
-        if (pd_get_valid(old) && pd_get_type(old) == MMU_PD_TABLE)
-            UNLOCKED_free_subtree(h, tbl_from_td(h, old, g), g, info);
+        if (dc_get_valid(old) && dc_get_type(old, g, target_lvl) == MMU_DESCRIPTOR_TABLE)
+            UNLOCKED_free_subtree(h, tbl_from_td(h, old, g, target_lvl), g, target_lvl, info);
 
 
         size -= cover;
@@ -250,8 +251,6 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size
     return true;
 }
 
-
-#include "../../kernel/mm/mm_info.h"
 
 bool mmu_map(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t size, mmu_pg_cfg cfg,
              mmu_op_info* info)
@@ -268,10 +267,12 @@ bool mmu_map(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t size, mmu_pg_
         };
 
     spin_lock(&h->slock_);
-    result = UNLOCKED_map_(h, virt, phys, size, cfg, info);
-    mmu_debug_dump(&mm_mmu_h, MMU_TBL_HI);
 
+
+    result = UNLOCKED_map_(h, virt, phys, size, cfg, info);
     MMU_APPLY_CHANGES()
+
+
     spin_unlock(&h->slock_);
 
     return result;
@@ -316,20 +317,20 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info
         for (l = MMU_TBL_LV0; l < target_lvl; l++) {
             i = table_index(va, g, l);
 
-            mmu_hw_pd pd = mmu_tbl_get_pd(tbl, i);
+            mmu_hw_dc dc = mmu_tbl_get_dc(tbl, i);
 
             // not valid
-            if (!pd_get_valid(pd)) {
+            if (!dc_get_valid(dc)) {
                 already_unmapped = true;
                 break;
             }
 
-            switch (pd_get_type(pd)) {
-                case MMU_PD_BLOCK:
+            switch (dc_get_type(dc, g, l)) {
+                case MMU_DESCRIPTOR_BLOCK:
                     tbl = split_block(h, tbl, g, i, l, info);
                     continue;
-                case MMU_PD_TABLE:
-                    tbl = tbl_from_td(h, pd, g);
+                case MMU_DESCRIPTOR_TABLE:
+                    tbl = tbl_from_td(h, dc, g, l);
                     continue;
                 default:
                     PANIC("mmu_map: err");
@@ -337,7 +338,7 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info
         }
 
         if (already_unmapped) {
-            cover = min(size, pd_cover_bytes(g, l));
+            cover = min(size, dc_cover_bytes(g, l));
             size -= cover;
             va += cover;
             continue;
@@ -345,13 +346,13 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info
 
         // build the null block descriptor
         i = table_index(va, g, target_lvl);
-        mmu_hw_pd old = mmu_tbl_get_pd(tbl, i);
+        mmu_hw_dc old = mmu_tbl_get_dc(tbl, i);
 
-        tbl.pds[i] = NULL_PD;
+        tbl.dcs[i] = NULL_PD;
 
         // if it was a table, free it (and all the subtables)
-        if (pd_get_type(old) == MMU_PD_TABLE && pd_get_valid(old))
-            UNLOCKED_free_subtree(h, tbl_from_td(h, old, g), g, info);
+        if (dc_get_type(old, g, target_lvl) == MMU_DESCRIPTOR_TABLE && dc_get_valid(old))
+            UNLOCKED_free_subtree(h, tbl_from_td(h, old, g, target_lvl), g, target_lvl, info);
 
         size -= cover;
         va += cover;
@@ -365,18 +366,18 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info
         for (l = MMU_TBL_LV0; l <= max_level(g); l++) {
             i = table_index(virt, g, l);
 
-            mmu_hw_pd pd = tbl.pds[i];
+            mmu_hw_dc dc = tbl.dcs[i];
 
-            if (!pd_get_valid(pd))
+            if (!dc_get_valid(dc))
                 break;
 
-            if (pd_get_type(pd) == MMU_PD_TABLE) {
-                mmu_tbl subtbl = tbl_from_td(pd, g);
+            if (dc_get_type(dc) == MMU_PD_TABLE) {
+                mmu_tbl subtbl = tbl_from_td(dc, g);
 
                 if (tbl_is_null(subtbl, g)) {
-                    tbl.pds[i] = NULL_PD;
+                    tbl.dcs[i] = NULL_PD;
 
-                    UNLOCKED_free_subtree(h, tbl_from_td(pd, g), info);
+                    UNLOCKED_free_subtree(h, tbl_from_td(dc, g), info);
                     break;
                 }
 
@@ -433,13 +434,13 @@ static inline bool mmu_supports_4kb_(uint64 id_aa64mmfr0)
     return (((id_aa64mmfr0 >> 28) & 0xF) == 0);
 }
 
-//  DDI0500J_cortex_a53_trm.pdf p.104
+//  DDI0500J_cortex_a53_trm.dcf p.104
 static inline bool mmu_supports_64kb_(uint64 id_aa64mmfr0)
 {
     return (((id_aa64mmfr0 >> 24) & 0xF) == 0);
 }
 
-//  DDI0500J_cortex_a53_trm.pdf p.104
+//  DDI0500J_cortex_a53_trm.dcf p.104
 static inline bool mmu_supports_16kb_(uint64 id_aa64mmfr0)
 {
     return (((id_aa64mmfr0 >> 20) & 0xF) == 0);
@@ -452,7 +453,7 @@ static void mmu_apply(mmu_handle* h)
     mmu_tbl tbl1 = ttbr1_from_handle(h);
 
 
-    ASSERT(tbl0.pds && tbl1.pds);
+    ASSERT(tbl0.dcs && tbl1.dcs);
 
 
     irq_spinlocked(&h->slock_)
@@ -484,8 +485,8 @@ static void mmu_apply(mmu_handle* h)
         _mmu_set_SCTLR_EL1(sctlr);
 
 
-        _mmu_set_TTBR0_EL1((uintptr)tbl0.pds);
-        _mmu_set_TTBR1_EL1((uintptr)tbl1.pds);
+        _mmu_set_TTBR0_EL1((uintptr)tbl0.dcs);
+        _mmu_set_TTBR1_EL1((uintptr)tbl1.dcs);
         mmu_apply_cfg(h->cfg_);
     }
 }
@@ -493,6 +494,6 @@ static void mmu_apply(mmu_handle* h)
 
 void mmu_destroy(mmu_handle* h, mmu_op_info* info)
 {
-    UNLOCKED_free_subtree(h, ttbr0_from_handle(h), h->cfg_.lo_gran, info);
-    UNLOCKED_free_subtree(h, ttbr1_from_handle(h), h->cfg_.hi_gran, info);
+    UNLOCKED_free_subtree(h, ttbr0_from_handle(h), h->cfg_.lo_gran, MMU_TBL_LV0, info);
+    UNLOCKED_free_subtree(h, ttbr1_from_handle(h), h->cfg_.hi_gran, MMU_TBL_LV0, info);
 }

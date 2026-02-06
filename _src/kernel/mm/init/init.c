@@ -11,6 +11,7 @@
 #include "arm/mmu/mmu.h"
 #include "identity_mapping.h"
 #include "kernel/mm.h"
+#include "lib/stdbool.h"
 #include "lib/unit/mem.h"
 
 static void early_reserve_device_and_kernel_mem()
@@ -75,6 +76,18 @@ static void mmu_free_fn(p_uintptr addr)
 }
 
 
+static pv_ptr reserve_malloc_allocator(void)
+{
+    const raw_kmalloc_cfg cfg = (raw_kmalloc_cfg) {
+        .assign_phys = true,
+        .fill_reserve = false,
+    };
+
+    v_uintptr va = (v_uintptr)raw_kmalloc(KPAGE_SIZE, "reserve malloc page", &cfg);
+
+    return pv_ptr_new(mm_kva_to_kpa(va), va);
+}
+
 void mm_early_init()
 {
     mm_info_init();
@@ -120,6 +133,7 @@ void mm_early_init()
     ASSERT(ptrs_are_kmapped(first_free_address));
 
 
+    reserve_malloc_reconfig_allocator(mm_kpa_to_kva_ptr(reserve_malloc_allocator));
     mmu_reconfig_allocators(&mm_mmu_h, mm_kpa_to_kva_ptr(mmu_allocator),
                             mm_kpa_to_kva_ptr(mmu_free_fn));
 

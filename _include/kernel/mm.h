@@ -33,9 +33,19 @@ static inline bool ptrs_are_kmapped(pv_ptr pv)
     return mm_kpa_to_kva(pv.pa) == pv.va;
 }
 
+typedef struct {
+    // if assign_phys == true, the kernel physmap offset is assured (va == pa + KERNEL_BASE), else
+    // it is not assured and the phys addr is dynamically assigned
+    bool assign_phys;
+    // if the reserve allocator should be filled after the allocation occurs.
+    bool fill_reserve;
+    // TODO: add more cfgs if needed (for example mmu_cfg)
+} raw_kmalloc_cfg;
 
-void* raw_kmalloc(size_t size, const char* tag);
-void raw_kfree(void* ptr);
+extern const raw_kmalloc_cfg RAW_KMALLOC_DEFAULT_CFG;
+
+void* raw_kmalloc(size_t size, const char* tag, const raw_kmalloc_cfg* cfg);
+void raw_kfree(void* ptr, const raw_kmalloc_cfg* cfg);
 
 
 #else
