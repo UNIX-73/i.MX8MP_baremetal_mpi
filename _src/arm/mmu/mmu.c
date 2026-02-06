@@ -45,6 +45,12 @@ void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free, isize_
 }
 
 
+isize_t mmu_get_physmap_offset(mmu_handle* h)
+{
+    return h->physmap_offset;
+}
+
+
 void mmu_activate()
 {
     uint64 sctlr = _mmu_get_SCTLR_EL1();
@@ -181,7 +187,7 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size
         mmu_granularity g;
         mmu_tbl tbl = get_first_tbl(h, va, &g);
 
-        ASSERT(size % g == 0 || va % g == 0 || pa % g == 0);
+        ASSERT(size % g == 0 && va % g == 0 && pa % g == 0);
 
         get_target_lvl(&target_lvl, &cover, size, g, va, pa);
 
@@ -202,7 +208,7 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size
                 mmu_tbl next = alloc_tbl(alloc, g, true, info);
 
                 // link the new allocated table in the current table level
-                tbl.pds[i] = td_build(next, g);
+                tbl.pds[i] = td_build(next, g, h->physmap_offset);
                 tbl = next;
 
                 continue;
@@ -245,6 +251,8 @@ static bool UNLOCKED_map_(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size
 }
 
 
+#include "../../kernel/mm/mm_info.h"
+
 bool mmu_map(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t size, mmu_pg_cfg cfg,
              mmu_op_info* info)
 {
@@ -261,6 +269,7 @@ bool mmu_map(mmu_handle* h, v_uintptr virt, p_uintptr phys, size_t size, mmu_pg_
 
     spin_lock(&h->slock_);
     result = UNLOCKED_map_(h, virt, phys, size, cfg, info);
+    mmu_debug_dump(&mm_mmu_h, MMU_TBL_HI);
 
     MMU_APPLY_CHANGES()
     spin_unlock(&h->slock_);

@@ -5,7 +5,6 @@
 #include <drivers/tmu/tmu.h>
 #include <kernel/init.h>
 #include <kernel/panic.h>
-#include <lib/memcpy.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 #include <lib/string.h>
@@ -13,13 +12,25 @@
 #include "arm/cpu.h"
 #include "kernel/io/term.h"
 #include "kernel/mm.h"
+#include "lib/mem.h"
+#include "mm/malloc/reserve_malloc.h"
+#include "mm/mm_info.h"
 
+
+pv_ptr test()
+{
+    v_uintptr va = (v_uintptr)raw_kmalloc(4096, "test");
+    p_uintptr pa = mm_kva_to_kpa(va);
+
+    return (pv_ptr) {pa, va};
+}
 
 // Main function of the kernel, called by the bootloader (/boot/boot.S)
 _Noreturn void kernel_entry()
 {
-    size_t coreid = ARM_get_cpu_affinity().aff0;
+    __attribute((unused)) v_uintptr ts = MM_KSECTIONS.text.start;
 
+    size_t coreid = ARM_get_cpu_affinity().aff0;
 
     if (coreid == 0) {
         if (!mm_kernel_is_relocated()) {
@@ -31,8 +42,15 @@ _Noreturn void kernel_entry()
     }
 
 
-    term_prints("prefree\n\r");
+    reserve_malloc_reconfig_allocator(test);
 
+    reserve_malloc_fill();
+
+
+    __attribute((unused)) void* test = raw_kmalloc(1, "kmalloc_test");
+    reserve_malloc_fill();
+
+    term_prints("prefree\n\r");
 
     loop asm volatile("wfi");
 }

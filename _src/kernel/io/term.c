@@ -23,7 +23,7 @@ static term_out early_output;
 static spinlock_t lock;
 
 
-void init_term_early(term_out early_out)
+void term_init_early(term_out early_out)
 {
     mode = TERM_EARLY_MODE;
     early_output = early_out;
@@ -46,7 +46,7 @@ void init_term_early(term_out early_out)
 static term_out full_output;
 
 
-void init_term_full()
+void term_init_full()
 {
     spinlock_init(&lock);
 

@@ -1,10 +1,11 @@
 #include "page_allocator.h"
 
 #include <lib/lock/spinlock_irq.h>
+#include <lib/string.h>
 
-#include "../init/early_kalloc.h"
+#include "../malloc/early_kalloc.h"
 #include "../mm_info.h"
-#include "arm/mmu/mmu.h"
+#include "kernel/mm.h"
 #include "kernel/panic.h"
 #include "lib/align.h"
 #include "lib/lock/_lock_types.h"
@@ -12,11 +13,15 @@
 #include "lib/mem.h"
 #include "lib/stdint.h"
 #include "lib/stdmacros.h"
-#include "lib/string.h"
 #include "page.h"
-#include "tests.h"
+
+#ifdef DEBUG
+#    include "tests.h"
+#endif
+
 
 #define MM_PAGE_BYTES MMU_GRANULARITY_4KB
+
 
 #define NONE (~(size_t)0)
 #define IS_NONE(v) ((v) == NONE)
@@ -215,7 +220,7 @@ static inline mm_page build_page(size_t i)
 {
     return (mm_page) {
         .order = s->pages[i].order,
-        .phys = i * MM_PAGE_BYTES,
+        .pa = i * MM_PAGE_BYTES,
         .data = s->pages[i].page,
     };
 }
@@ -223,7 +228,7 @@ static inline mm_page build_page(size_t i)
 
 size_t page_allocator_bytes_to_order(size_t bytes)
 {
-    size_t pages = div_round_up(bytes, MM_PAGE_BYTES);
+    size_t pages = div_ceil(bytes, MM_PAGE_BYTES);
     return log2_ceil(pages);
 }
 
@@ -256,7 +261,7 @@ mm_page page_malloc(size_t order, mm_page_data p)
 
 void page_free(mm_page p)
 {
-    size_t i = p.phys / MM_PAGE_BYTES;
+    size_t i = p.pa / MM_PAGE_BYTES;
 
     ASSERT(i < s->N);
     ASSERT(!s->pages[i].free, "page_allocator: double free");
@@ -286,7 +291,7 @@ void page_free_by_tag(const char* tag)
             continue;
 
         mm_page p = {
-            .phys = i * MM_PAGE_BYTES,
+            .pa = i * MM_PAGE_BYTES,
             .order = n->order,
             .data = n->page,
         };
@@ -309,7 +314,7 @@ void page_allocator_init()
 
     size_t bytes = state_bytes + free_list_bytes + pages_bytes;
 
-    s = (void*)early_kalloc(bytes, "page_allocator", true, false);
+    s = mm_kpa_to_kva_ptr(early_kalloc(bytes, "page_allocator", true, false));
     p_uintptr free_list_addr = (p_uintptr)s + state_bytes;
     p_uintptr pages_addr = free_list_addr + free_list_bytes;
 
@@ -417,9 +422,9 @@ static void page_reserve_range(p_uintptr start, size_t pages, mm_page_data data)
 }
 
 
-void page_allocator_reserve_memblocks(memblock* mblcks, size_t n)
+p_uintptr page_allocator_update_memblocks(const memblock* mblcks, size_t n)
 {
-    uintptr addr = 0;
+    p_uintptr addr = 0;
 
     for (size_t i = 0; i < n; i++) {
         memblock mblck = mblcks[i];
@@ -429,7 +434,6 @@ void page_allocator_reserve_memblocks(memblock* mblcks, size_t n)
 
         mm_page_data data = (mm_page_data) {
             .tag = mblck.tag,
-            .virt = addr,
             .device_mem = mblck.device_memory,
             .permanent = mblck.permanent,
         };
@@ -439,6 +443,8 @@ void page_allocator_reserve_memblocks(memblock* mblcks, size_t n)
 
         addr += mblck.blocks * MM_PAGE_BYTES;
     }
+
+    return addr;
 }
 
 

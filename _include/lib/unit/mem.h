@@ -2,11 +2,15 @@
 
 #include <lib/stdint.h>
 
-#define MEM_BYTE 0x1UL
-#define MEM_KiB (MEM_BYTE * 0x400UL)
-#define MEM_MiB (MEM_KiB * 0x400UL)
-#define MEM_GiB (MEM_MiB * 0x400UL)
-#define MEM_TiB (MEM_GiB * 0x400UL)
+
+#define MEM_BYTE 0x1ULL
+#define MEM_KiB (MEM_BYTE * 0x400ULL)
+#define MEM_MiB (MEM_KiB * 0x400ULL)
+#define MEM_GiB (MEM_MiB * 0x400ULL)
+#define MEM_TiB (MEM_GiB * 0x400ULL)
+
+
+#define BYTES_TO_BITS(byte_n) (byte_n * 8)
 
 
 static inline size_t mem_byte_to_kib(size_t byte)

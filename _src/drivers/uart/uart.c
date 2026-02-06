@@ -8,6 +8,7 @@
 #include "lib/lock/irqlock.h"
 #include "lib/lock/spinlock_irq.h"
 #include "lib/mem.h"
+#include "lib/stdbitfield.h"
 #include "lib/stdmacros.h"
 
 
@@ -225,10 +226,8 @@ static void uart_set_irq_state_(const driver_handle* h, UART_IRQ_SOURCE irq, boo
 
     uart_state* state = uart_get_state_(h);
 
-    if (enable)
-        BITFIELD32_SET(&(state->irq_status), irq);
-    else
-        BITFIELD32_CLEAR(&(state->irq_status), irq);
+
+    bitfield_set(state->irq_status, irq, enable);
 
 #define SET_IRQ_CASE(irq, reg, bf, regv_name)     \
     case irq: {                                   \
@@ -287,7 +286,7 @@ static inline bool uart_get_irq_state_(const driver_handle* h, UART_IRQ_SOURCE i
 #endif
     bitfield32 irq_status = uart_get_state_(h)->irq_status;
 
-    return (bool)BITFIELD32_GET(irq_status, irq);
+    return (bool)bitfield_get(irq_status, irq);
 }
 
 static bitfield32 uart_get_irq_sources(const driver_handle* h)
@@ -409,7 +408,7 @@ void uart_handle_irq(const driver_handle* h)
         bitfield32 source = uart_get_irq_sources(h);
 
         for (size_t i = UART_IRQ_SRC_START; i < UART_IRQ_SRC_COUNT; i++) {
-            if (BITFIELD32_GET(source, i)) {
+            if (bitfield_get(source, i)) {
                 UART_IRQ_SOURCE_HANDLERS_[i](h);
             }
         }

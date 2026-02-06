@@ -4,6 +4,7 @@
 #include "arm/mmu/mmu.h"
 #include "kernel/panic.h"
 #include "lib/mem.h"
+#include "lib/stdbool.h"
 #include "lib/stdint.h"
 #include "mmu_pd.h"
 #include "mmu_types.h"
@@ -115,7 +116,7 @@ static inline mmu_tbl alloc_tbl(mmu_alloc alloc, mmu_granularity g, bool init_nu
     if (info)
         info->alocated_tbls++;
 
-    ASSERT((uintptr)addr % tbl_alignment(g) == 0);
+    ASSERT((v_uintptr)addr % tbl_alignment(g) == 0);
 
 
     mmu_tbl tbl = (mmu_tbl) {.pds = addr};
@@ -150,23 +151,32 @@ static inline mmu_tbl split_block(mmu_handle* h, mmu_tbl parent, mmu_granularity
     mmu_alloc alloc = h->alloc_;
 
     mmu_hw_pd old = parent.pds[index];
-    mmu_pg_cfg cfg = cfg_from_pd(old);
-    p_uintptr pa = pd_get_output_address(old, g);
-    size_t new_l_bytes = pd_cover_bytes(g, l + 1);
+    bool valid = (pd_get_valid(old));
+
+    mmu_tbl new_tbl = alloc_tbl(alloc, g, true, info);
+
 
     ASSERT(l < max_level(g));
     ASSERT(pd_get_type(old) == MMU_PD_BLOCK);
-    ASSERT(pa % pd_cover_bytes(g, l) == 0);
 
-
-    mmu_tbl new_tbl = alloc_tbl(alloc, g, false, info);
 
     // create the new blocks
-    for (size_t i = 0; i < tbl_entries(g); i++)
-        new_tbl.pds[i] = bd_build(cfg, pa + (i * new_l_bytes), g);
+    if (valid) {
+        mmu_pg_cfg cfg = cfg_from_pd(old);
+        p_uintptr pa = pd_get_output_address(old, g);
+        size_t new_l_bytes = pd_cover_bytes(g, l + 1);
+        ASSERT(pa % pd_cover_bytes(g, l) == 0);
+
+
+        for (size_t i = 0; i < tbl_entries(g); i++)
+            new_tbl.pds[i] = bd_build(cfg, pa + (i * new_l_bytes), g);
+    }
+    else
+        tbl_init_null(new_tbl, g);
+
 
     // set the new table
-    parent.pds[index] = td_build(new_tbl, g);
+    parent.pds[index] = td_build(new_tbl, g, h->physmap_offset);
 
     return new_tbl;
 }

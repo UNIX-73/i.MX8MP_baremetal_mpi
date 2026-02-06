@@ -35,14 +35,12 @@ static term_out_result term_output(char c)
 
 void kernel_init(void)
 {
-    init_term_full();
+    term_init_full();
     term_add_output(term_output);
 
-
     // Stage 0 (pre irq initialization)
-    for (kernel_initcall_t* fn = __kernel_init_stage0_start; fn < __kernel_init_stage0_end; fn++) {
+    for (kernel_initcall_t* fn = __kernel_init_stage0_start; fn < __kernel_init_stage0_end; fn++)
         (*fn)();
-    }
 
     arm_exceptions_set_status((arm_exception_status) {
         .fiq = true,
@@ -50,6 +48,7 @@ void kernel_init(void)
         .serror = true,
         .debug = true,
     });
+
 
     GICV3_init_distributor(&GIC_DRIVER);
     GICV3_init_cpu(&GIC_DRIVER, ARM_get_cpu_affinity().aff0);

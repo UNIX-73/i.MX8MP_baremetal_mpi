@@ -48,7 +48,7 @@ setup_system:
     bl _clean_bss
 
     ldr x0, =__text_start
-    ldr x1, =__kernel_mem_start
+    ldr x1, =__heap_start
     mov x2, #KERNEL_BASE
 
     sub x0, x0, x2

@@ -6,6 +6,7 @@
 #include <lib/stdmacros.h>
 #include <lib/string.h>
 
+#include "lib/stdint.h"
 #include "panic_exception/panic_exception_handlers.h"
 #include "panic_puts.h"
 

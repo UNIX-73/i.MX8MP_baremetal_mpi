@@ -130,7 +130,7 @@ static inline bool pd_get_access_flag(const mmu_hw_pd pd)
     return (bool)((pd.v >> MMU_PD_AF_SHIFT) & MMU_PD_BITS(MMU_PD_AF_WIDTH));
 }
 
-static inline uint64 pd_get_output_address(const mmu_hw_pd pd, mmu_granularity g)
+static inline p_uintptr pd_get_output_address(const mmu_hw_pd pd, mmu_granularity g)
 {
     return (pd.v & output_address_mask_(g));
 }
@@ -194,7 +194,7 @@ static inline void pd_set_access_flag(mmu_hw_pd* pd, bool access_flag)
     pd->v |= ((uint64)access_flag << MMU_PD_AF_SHIFT);
 }
 
-static inline void pd_set_output_address(mmu_hw_pd* pd, uint64 output_address, mmu_granularity g)
+static inline void pd_set_output_address(mmu_hw_pd* pd, p_uintptr output_address, mmu_granularity g)
 {
     DEBUG_ASSERT(!(output_address >= (1ULL << output_address_bit_n_(g))),
                  "pd_set_output_address: invalid output address, out of granularity");
@@ -227,12 +227,14 @@ static inline void pd_set_software_defined(mmu_hw_pd* pd, uint8 software_defined
 }
 
 
-static inline mmu_hw_pd td_build(mmu_tbl next, mmu_granularity g)
+static inline mmu_hw_pd td_build(mmu_tbl next, mmu_granularity g, isize_t physmap_offset)
 {
     mmu_hw_pd pd = (mmu_hw_pd) {0};
 
+    p_uintptr tbl_pa = (v_uintptr)next.pds - physmap_offset;
+
     pd_set_type(&pd, MMU_PD_TABLE);
-    pd_set_output_address(&pd, (uintptr)next.pds, g);
+    pd_set_output_address(&pd, tbl_pa, g);
     pd_set_valid(&pd, true);
 
     return pd;

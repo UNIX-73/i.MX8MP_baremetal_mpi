@@ -5,7 +5,6 @@
 
 
 typedef struct {
-    v_uintptr virt;
     const char* tag;
     // TODO: use a bitfield
     bool device_mem;

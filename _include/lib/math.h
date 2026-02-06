@@ -50,9 +50,11 @@ static inline uint64 min(uint64 a, uint64 b)
 }
 
 
-static inline uint64 div_round_up(uint64 a, uint64 b)
+#define DIV_CEIL(a, b) ((a + b - 1) / b)
+
+static inline uint64 div_ceil(uint64 a, uint64 b)
 {
-    return (a + b - 1) / b;
+    return DIV_CEIL(a, b);
 }
 
 

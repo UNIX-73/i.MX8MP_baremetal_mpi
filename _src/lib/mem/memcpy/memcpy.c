@@ -1,5 +1,5 @@
 #include <kernel/panic.h>
-#include <lib/memcpy.h>
+#include <lib/mem.h>
 #include <lib/stdint.h>
 #include <lib/string.h>
 
@@ -41,6 +41,7 @@ void* memcpy64(void* dst, void* src, uint64 size)
 
     return _memcpy64(dst, src, size);
 }
+
 
 /*
 void *memcpy(void *dst, void *src, uint64 size)

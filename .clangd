@@ -7,7 +7,6 @@ CompileFlags:
     "-Wall",
     "-Werror",
     "-DDRIVERS",
-    "-xc-header",
     "-nostdlib",
     "-nostdinc",
     "-nostartfiles",

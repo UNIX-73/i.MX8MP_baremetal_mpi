@@ -10,22 +10,24 @@ KERNEL_VA_BASE = KERNEL_PA_BASE + HI_VA_BASE;
 SECTIONS {
     . = KERNEL_VA_BASE;
 
-    .text KERNEL_VA_BASE : ALIGN(64) {
+    .text KERNEL_VA_BASE : ALIGN(4096) {
         __text_start = .;
         KEEP(*(.text.boot))
         *(.text*)
-        . = ALIGN(64);
-        __text_end = .;
-    } > HI_VMEM AT > DDR_KERNEL
 
-    .vectors : ALIGN(2048) {
         __vectors_start = .;
         KEEP(*(.vectors))
-        . = ALIGN(64);
         __vectors_end = .;
-    } > HI_VMEM AT > DDR_KERNEL
 
-    .rodata : ALIGN(16) {
+        . = ALIGN(4096);
+        __text_end = .;
+    } > HI_VMEM AT > DDR_KERNEL
+    
+    __text_size = __text_end - __text_start;
+
+
+    .rodata : ALIGN(4096) {
+        __rodata_start = .;
         *(.rodata*)
         *(.rodata.*)
         *(.platform_info)
@@ -48,23 +50,41 @@ SECTIONS {
         KEEP(*(.kernel_init_stage2))
         __kernel_init_stage2_end = .;
 
-        . = ALIGN(16);
+
+        . = ALIGN(4096);
+        __rodata_end = .;
     } > HI_VMEM AT > DDR_KERNEL
 
-    .data : ALIGN(16) {
+    __rodata_size = __rodata_end - __rodata_start;
+
+
+    .data : ALIGN(4096) {
+        __data_start = .;
         *(.data*)
-        . = ALIGN(16);
+        
+
+        . = ALIGN(4096);
+        __data_end = .;
     } > HI_VMEM AT > DDR_KERNEL
 
-    .bss : ALIGN(64) {
+    __data_size = __data_end - __data_start;
+
+
+    .bss : ALIGN(4096) {
         __bss_start = .;
         *(.bss*)
         *(COMMON)
-        . = ALIGN(64);
+
+
+        . = ALIGN(4096);
         __bss_end = .;
     } > HI_VMEM AT > DDR_KERNEL
 
+    __bss_size = __bss_end - __bss_start;
+
     .stacks (NOLOAD) : ALIGN(4096) {
+        __stacks_start = .;
+
         __stacks_el2_start = .;
         . += (__NUM_CORES * __EL2_STACK_SIZE);
         __stacks_el2_end = .;
@@ -72,12 +92,16 @@ SECTIONS {
         __stacks_el1_start = .;
         . += (__NUM_CORES * __EL1_STACK_SIZE);
         __stacks_el1_end = .;
+
+        . = ALIGN(4096);
+        __stacks_end = .;
     } > HI_VMEM AT > DDR_KERNEL
 
-    /* aligned to 4MiB pages, 1GiB size */
-    .kernel_mem (NOLOAD) : ALIGN(0x1000 * 4) {
-        __kernel_mem_start = .;
-        . += 0x40000000;
-        __kernel_mem_end = .;
-    } > HI_VMEM AT > DDR_KERNEL
+    __stacks_size = __stacks_end - __stacks_start;
+
+
+
+    __heap_start = .;
+    __heap_end = ~0;
+    __heap_size = __heap_end - __heap_start;
 }

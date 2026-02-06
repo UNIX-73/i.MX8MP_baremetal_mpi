@@ -10,8 +10,8 @@ typedef char (*term_in)(void);
 typedef term_out_result (*term_out)(const char c);
 
 
-void init_term_early(term_out early_out);
-void init_term_full();
+void term_init_early(term_out early_out);
+void term_init_full();
 
 void term_add_output(term_out out);
 void term_remove_output(term_out out);

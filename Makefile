@@ -18,6 +18,12 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(C_FLAGS) -c $< -o $@
 
 
+# Cpp files
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	mkdir -p $(dir $@)
+	$(CPP) $(CPP_FLAGS) -c $< -o $@
+
+
 # Rust files TODO: Allow using debug build + gdb
 $(OBJ_DIR)/rslib.a: Cargo.toml _src/*.rs
 	$(RUST) build --release --target $(RS_TARGET)

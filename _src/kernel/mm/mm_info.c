@@ -2,11 +2,55 @@
 
 #include <frdm_imx8mp.h>
 #include <lib/mem.h>
+#include <lib/stdint.h>
 
 #include "kernel/panic.h"
 #include "lib/math.h"
 
 const size_t MM_PAGE_BYTES = MMU_GRANULARITY_4KB;
+
+
+extern v_uintptr __text_start[];
+extern v_uintptr __text_end[];
+extern size_t __text_size[];
+
+extern v_uintptr __rodata_start[];
+extern v_uintptr __rodata_end[];
+extern size_t __rodata_size[];
+
+extern v_uintptr __data_start[];
+extern v_uintptr __data_end[];
+extern size_t __data_size[];
+
+extern v_uintptr __bss_start[];
+extern v_uintptr __bss_end[];
+extern size_t __bss_size[];
+
+extern v_uintptr __stacks_start[];
+extern v_uintptr __stacks_end[];
+extern size_t __stacks_size[];
+
+extern v_uintptr __heap_start[];
+extern v_uintptr __heap_end[];
+extern size_t __heap_size[];
+
+
+#define BUILD_KSECTION(section)                                                       \
+    (mm_ksection)                                                                     \
+    {                                                                                 \
+        .start = (v_uintptr)__##section##_start, .end = (v_uintptr)__##section##_end, \
+        .size = (size_t)__##section##_size,                                           \
+    }
+
+const mm_ksections MM_KSECTIONS = (mm_ksections) {
+    .text = BUILD_KSECTION(text),
+    .rodata = BUILD_KSECTION(rodata),
+    .data = BUILD_KSECTION(data),
+    .bss = BUILD_KSECTION(bss),
+    .stacks = BUILD_KSECTION(stacks),
+    .heap = BUILD_KSECTION(heap),
+};
+
 
 static size_t mm_max_ddr_size_;
 static size_t mm_ddr_size_;
@@ -15,7 +59,6 @@ static p_uintptr mm_ddr_start_;
 static p_uintptr mm_ddr_end_;
 
 static p_uintptr mm_kernel_start_;
-static size_t mm_kernel_size_;
 
 static size_t mm_page_count_;
 
@@ -30,9 +73,6 @@ static size_t mm_addr_space_;
 /// a dtb file or any other valid source that allows the kernel to dynamically initialize itself
 void mm_info_init()
 {
-    extern p_uintptr
-        __kernel_mem_start[]; // mem start, not the kernel itself (free memory for allocations etc)
-
     extern void _start();
 
 
@@ -43,13 +83,12 @@ void mm_info_init()
     mm_ddr_end_ = mm_ddr_start_ + mm_ddr_size_;
 
     mm_kernel_start_ = (p_uintptr)_start;
-    mm_kernel_size_ = (p_uintptr)__kernel_mem_start - mm_kernel_start_;
 
 
     mm_addr_space_ = mm_ddr_end_;
 
 
-    mm_page_count_ = div_round_up(mm_addr_space_, MM_PAGE_BYTES);
+    mm_page_count_ = div_ceil(mm_addr_space_, MM_PAGE_BYTES);
 
 
     ASSERT(mm_ddr_size_ <= mm_max_ddr_size_);
@@ -80,11 +119,6 @@ p_uintptr mm_info_kernel_start(void)
     return mm_kernel_start_;
 }
 
-
-size_t mm_info_kernel_size(void)
-{
-    return mm_kernel_size_;
-}
 
 size_t mm_info_page_count(void)
 {

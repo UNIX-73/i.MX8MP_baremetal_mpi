@@ -62,7 +62,7 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
         dbg_puts("/");
         dbg_dec(entries - 1);
         dbg_puts("] VA ");
-        dbg_u64(va);
+        dbg_u64(ttbrx == MMU_TBL_LO ? va : va | 0xFFFF000000000000);
         dbg_puts(" -> ");
 
         switch (pd_get_type(pd)) {
@@ -71,6 +71,9 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
 
                 dbg_puts("TABLE @ PA ");
                 dbg_u64(pa);
+                dbg_puts(" - pd[");
+                dbg_u64(pd.v);
+                dbg_puts("]");
                 dbg_puts("\n\r");
 
                 mmu_debug_dump_tbl_(h, tbl_from_td(h, pd, g), ttbrx, lvl + 1, va, indent + 1);
@@ -84,6 +87,9 @@ void mmu_debug_dump_tbl_(mmu_handle* h, mmu_tbl tbl, mmu_tbl_rng ttbrx, mmu_tbl_
                 dbg_u64(pa);
                 dbg_puts(" size ");
                 dbg_dec(cover);
+                dbg_puts(" - pd[");
+                dbg_u64(pd.v);
+                dbg_puts("]");
                 dbg_puts("\n\r");
                 break;
             }

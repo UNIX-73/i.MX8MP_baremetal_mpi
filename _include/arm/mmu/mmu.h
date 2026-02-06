@@ -22,6 +22,8 @@ typedef enum {
 } mmu_tbl_rng;
 
 
+/// the return type must be a virtual address that is mapped according to the provided mmu physmap
+/// offset
 typedef void* (*mmu_alloc)(size_t bytes, size_t alignment);
 typedef void (*mmu_free)(void* addr);
 
@@ -92,6 +94,8 @@ typedef struct {
 
 /// initializes the private structures needed for mmu control
 void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free, isize_t physmap_offset);
+
+isize_t mmu_get_physmap_offset(mmu_handle* h);
 
 /// activates the mmu with the previously initialized config
 void mmu_activate();

@@ -84,7 +84,7 @@ static inline bool TMU_get_irq_status_(const driver_handle* h, tmu_irq irq)
 {
     tmu_state* state = (tmu_state*)h->state;
 
-    return BITFIELD8_GET((state->irq_status), irq);
+    return bitfield_get((state->irq_status), irq);
 }
 
 static inline void TMU_set_irq_status_(const driver_handle* h, tmu_irq irq, bool enable)
@@ -98,33 +98,33 @@ static inline void TMU_set_irq_status_(const driver_handle* h, tmu_irq irq, bool
     switch (irq) {
         case TMU_IRQ_ITTE0:
             TMU_TIER_ITTEIE0_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE0)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE0);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ITTE0)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ITTE0);
             break;
         case TMU_IRQ_ITTE1:
             TMU_TIER_ITTEIE1_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ITTE1)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ITTE1);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ITTE1)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ITTE1);
             break;
         case TMU_IRQ_ATTE0:
             TMU_TIER_ATTEIE0_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE0)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ATTE0)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ATTE0);
             break;
         case TMU_IRQ_ATTE1:
             TMU_TIER_ATTEIE1_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ATTE1)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ATTE1);
             break;
         case TMU_IRQ_ATCTE0:
             TMU_TIER_ATCTEIE0_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE0)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE0);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ATCTE0)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ATCTE0);
             break;
         case TMU_IRQ_ATCTE1:
             TMU_TIER_ATCTEIE1_set(&tier, enable);
-            enable ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATCTE1)
-                   : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATCTE1);
+            enable ? bitfield_set_high((state->irq_status), TMU_IRQ_ATCTE1)
+                   : bitfield_clear((state->irq_status), TMU_IRQ_ATCTE1);
             break;
         default:
             PANIC("");
@@ -149,10 +149,10 @@ static inline void TMU_ATTEX_irq_status_set_(const driver_handle* h, bool atte0,
     TMU_TIER_ATTEIE1_set(&tier, atte1);
     TMU_TIER_write(h->base, tier);
 
-    atte0 ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE0)
-          : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE0);
-    atte1 ? BITFIELD8_SET(&(state->irq_status), TMU_IRQ_ATTE1)
-          : BITFIELD8_CLEAR(&(state->irq_status), TMU_IRQ_ATTE1);
+    atte0 ? bitfield_set_high((state->irq_status), TMU_IRQ_ATTE0)
+          : bitfield_clear((state->irq_status), TMU_IRQ_ATTE0);
+    atte1 ? bitfield_set_high((state->irq_status), TMU_IRQ_ATTE1)
+          : bitfield_clear((state->irq_status), TMU_IRQ_ATTE1);
 }
 
 static inline bitfield8 TMU_get_irq_sources_(const driver_handle* h)
@@ -350,7 +350,7 @@ void TMU_handle_irq(const driver_handle* h)
     bitfield8 irq_sources = TMU_get_irq_sources_(h);
 
     for (tmu_irq irq = TMU_IRQ_START; irq < TMU_IRQ_COUNT; irq++) {
-        if (BITFIELD8_GET(irq_sources, irq)) {
+        if (bitfield_get(irq_sources, irq)) {
             // The enum is defined so probe 0 is even and probe 1 is odd
             TMU_IRQ_HANDLERS_[irq](h, irq % 2);
         }

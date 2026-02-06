@@ -6,3 +6,6 @@
 
 
 #define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
+
+
+#define TYPE_BIT_SIZE(type) (sizeof(type) * 8)
