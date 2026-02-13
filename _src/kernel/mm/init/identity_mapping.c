@@ -12,6 +12,7 @@
 #include "kernel/io/term.h"
 #include "kernel/mm.h"
 #include "kernel/panic.h"
+#include "lib/stdbool.h"
 
 
 /// returns the pa, not va, but as when relocating the address will be relocated, works fine.
@@ -43,21 +44,9 @@ static void im_free(void* addr)
 
 void early_identity_mapping()
 {
-    mmu_cfg cfg = (mmu_cfg) {
-        .d_cache = true,
-        .i_cache = true,
-        .align_trap = false,
-
-        .hi_enable = true,
-        .lo_enable = true,
-
-        .hi_va_addr_bits = 48,
-        .lo_va_addr_bits = 48,
-
-        .hi_gran = MMU_GRANULARITY_4KB,
-        .lo_gran = MMU_GRANULARITY_4KB,
-    };
-
+    mmu_cfg cfg;
+    mmu_cfg_new(&cfg, true, true, false, true, true, 48, 48, MMU_GRANULARITY_4KB,
+                MMU_GRANULARITY_4KB);
 
     mmu_init(&mm_mmu_h, cfg, im_alloc, im_free, 0);
 

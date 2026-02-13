@@ -92,6 +92,18 @@ typedef struct {
 } mmu_op_info;
 
 
+typedef struct {
+    v_uintptr va;
+    p_uintptr pa;
+    size_t bytes;
+    mmu_pg_cfg cfg;
+    bool valid;
+} mmu_peek_data;
+
+// the returns indicates to continue the peek (return false == break, true == continue)
+typedef bool (*mmu_peek_cb)(mmu_peek_data data, void* args);
+
+
 /// initializes the private structures needed for mmu control
 void mmu_init(mmu_handle* h, mmu_cfg cfg, mmu_alloc alloc, mmu_free free, isize_t physmap_offset);
 
@@ -120,6 +132,12 @@ mmu_pg_cfg mmu_pg_cfg_new(uint8 attr_index, mmu_access_permission ap, uint8 shar
                           bool non_secure, bool access_flag, bool pxn, bool uxn, uint8 sw);
 
 
+size_t mmu_hi_va_bits(mmu_handle* h);
+size_t mmu_lo_va_bits(mmu_handle* h);
+
+size_t mmu_pa_bits(mmu_handle* h);
+
+
 mmu_cfg mmu_get_cfg(mmu_handle* h);
 void mmu_reconfig_allocators(mmu_handle* h, mmu_alloc alloc, mmu_free free);
 
@@ -127,7 +145,10 @@ void mmu_reconfig_allocators(mmu_handle* h, mmu_alloc alloc, mmu_free free);
 bool mmu_map(mmu_handle* h, v_uintptr va, p_uintptr pa, size_t size, mmu_pg_cfg cfg,
              mmu_op_info* info);
 
+
 bool mmu_unmap(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info);
+
+bool mmu_peek(mmu_handle* h, v_uintptr va, size_t size, mmu_peek_cb cb, void* args);
 
 
 /// changes the physmap_offset. It determines the offset from the pa of the actual mmu tables

@@ -7,7 +7,9 @@
 #include <lib/stdmacros.h>
 
 #include "kernel/panic.h"
+#include "lib/align.h"
 #include "lib/lock/spinlock_irq.h"
+#include "lib/stdbool.h"
 #include "mmu_dc.h"
 #include "mmu_helpers.h"
 #include "mmu_types.h"
@@ -74,6 +76,16 @@ void mmu_deactivate()
 bool mmu_is_active()
 {
     return (bool)(_mmu_get_SCTLR_EL1() & 0b1);
+}
+
+size_t mmu_hi_va_bits(mmu_handle* h)
+{
+    return h->cfg_.hi_va_addr_bits;
+}
+
+size_t mmu_lo_va_bits(mmu_handle* h)
+{
+    return h->cfg_.lo_va_addr_bits;
 }
 
 
@@ -333,8 +345,10 @@ bool UNLOCKED_unmap_(mmu_handle* h, v_uintptr va, size_t size, mmu_op_info* info
                     tbl = tbl_from_td(h, dc, g, l);
                     continue;
                 default:
-                    PANIC("mmu_map: err");
+                    break;
             }
+
+            PANIC("mmu_map: err");
         }
 
         if (already_unmapped) {
@@ -414,6 +428,100 @@ bool mmu_unmap(mmu_handle* h, v_uintptr virt, size_t size, mmu_op_info* info)
     spin_unlock(&h->slock_);
 
     return result;
+}
+
+
+bool mmu_peek(mmu_handle* h, v_uintptr va, size_t size, mmu_peek_cb cb, void* args)
+{
+    if (!cb)
+        return false;
+
+    if (size == 0)
+        return true;
+
+    size_t i;
+    mmu_granularity g;
+    mmu_tbl_level l;
+
+    while (size > 0) {
+        mmu_tbl tbl = get_first_tbl(h, va, &g);
+
+        for (l = MMU_TBL_LV0; l <= max_level(g); l++) {
+            i = table_index(va, g, l);
+
+            mmu_hw_dc dc = mmu_tbl_get_dc(tbl, i);
+
+            // not valid
+            if (!dc_get_valid(dc)) {
+                if (!cb(
+                        (mmu_peek_data) {
+                            .va = align_down(va, dc_cover_bytes(g, l)),
+                            .pa = 0x0,
+                            .bytes = dc_cover_bytes(g, l),
+                            .cfg = cfg_from_dc(dc),
+                            .valid = false,
+                        },
+                        args))
+                    return true;
+
+                break;
+            }
+
+            switch (dc_get_type(dc, g, l)) {
+                case MMU_DESCRIPTOR_TABLE:
+                    tbl = tbl_from_td(h, dc, g, l);
+                    continue;
+
+                case MMU_DESCRIPTOR_BLOCK:
+                    if (!cb(
+                            (mmu_peek_data) {
+                                .va = align_down(va, dc_cover_bytes(g, l)),
+                                .pa = dc_get_output_address(dc, g),
+                                .bytes = dc_cover_bytes(g, l),
+                                .cfg = cfg_from_dc(dc),
+                                .valid = true,
+                            },
+                            args))
+                        return true;
+
+                    break;
+
+                case MMU_DESCRIPTOR_PAGE:
+                    DEBUG_ASSERT(l == max_level(g));
+                    if (!cb(
+                            (mmu_peek_data) {
+                                .va = align_down(va, dc_cover_bytes(g, l)),
+                                .pa = dc_get_output_address(dc, g),
+                                .bytes = dc_cover_bytes(g, l),
+                                .cfg = cfg_from_dc(dc),
+                                .valid = true,
+                            },
+                            args))
+                        return true;
+
+                    break;
+
+                default:
+                    PANIC("mmu_peek: err");
+            }
+
+            break;
+        }
+
+        size_t cover = dc_cover_bytes(g, l);
+        v_uintptr block_start = align_down(va, cover);
+        v_uintptr block_end = block_start + cover;
+
+        size_t sz = block_end - va;
+        if (sz > size)
+            sz = size;
+
+
+        size -= sz;
+        va += sz;
+    }
+
+    return true;
 }
 
 

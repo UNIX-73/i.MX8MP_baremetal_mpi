@@ -6,7 +6,6 @@
 #include <lib/stdbitfield.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
-
 #include "../vmalloc.h"
 
 typedef bitfield8 bf;
@@ -28,9 +27,7 @@ typedef struct rva_node {
 
     v_uintptr start;
     size_t size;
-
-    // TODO: bitfield
-    vmalloc_allocated_area_info info;
+    vmalloc_mdt mdt;
 } rva_node;
 
 
@@ -85,8 +82,7 @@ _Static_assert(sizeof(vmalloc_container) == KPAGE_SIZE &&
                _Alignof(vmalloc_container) == KPAGE_ALIGN);
 
 
-// returns the address of the first fva node
-fva_node* vmalloc_init_containers();
+void vmalloc_init_containers();
 
 fva_node* get_new_fva_node();
 rva_node* get_new_rva_node();

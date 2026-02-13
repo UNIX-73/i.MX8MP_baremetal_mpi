@@ -53,10 +53,13 @@ typedef struct {
     // if the reserve allocator should be filled after the allocation occurs.
     bool device_mem;
     bool permanent;
+    bool init_zeroed;
     // TODO: add more cfgs if needed (for example mmu_cfg)
 } raw_kmalloc_cfg;
 
-extern const raw_kmalloc_cfg RAW_KMALLOC_DEFAULT_CFG;
+extern const raw_kmalloc_cfg RAW_KMALLOC_KMAP_CFG;
+extern const raw_kmalloc_cfg RAW_KMALLOC_DYNAMIC_CFG;
+
 
 void* raw_kmalloc(size_t pages, const char* tag, const raw_kmalloc_cfg* cfg);
 void raw_kfree(void* ptr);

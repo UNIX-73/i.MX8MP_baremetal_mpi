@@ -3,6 +3,8 @@
 #include <lib/stdbool.h>
 #include <lib/stdint.h>
 
+#include "kernel/panic.h"
+
 // phys address uintptr
 typedef uintptr p_uintptr;
 
@@ -25,6 +27,60 @@ static inline pv_ptr pv_ptr_new(p_uintptr pa, v_uintptr va)
 
 #define UINTPTR_V_TO_PTR(type, uintptr_virt) ((type*)(uintptr_virt))
 #define PTR_TO_UINTPTR_V(ptr) ((v_uintptr)(ptr))
+
+
+size_t pa_supported_bits();
+
+
+static inline bool address_is_valid(uintptr a, size_t bits, bool sign_extended)
+{
+    ASSERT(bits > 0 && bits <= 64);
+
+    if (bits == 64)
+        return true;
+
+    uint64 upper_mask = ~((1ULL << bits) - 1);
+
+    if (!sign_extended)
+        return (upper_mask & a) == 0;
+
+    uint64 sign_bit = 1ULL << (bits - 1);
+
+    return (a & sign_bit) ? (a & upper_mask) == upper_mask : (a & upper_mask) == 0;
+}
+
+static inline v_uintptr va_sign_extend(v_uintptr va, size_t bits)
+{
+    if (bits == 64)
+        return va;
+
+    ASSERT(bits > 0 && bits < 64);
+    ASSERT(address_is_valid(va, bits, false));
+
+    uint64 sign_bit = 1ULL << (bits - 1);
+    uint64 mask = ~((1ULL << bits) - 1);
+
+    v_uintptr a = (va & sign_bit) ? (va | mask) : va;
+
+    DEBUG_ASSERT(address_is_valid(a, bits, true));
+
+    return a;
+}
+
+static inline v_uintptr va_zero_extend(v_uintptr va, size_t bits)
+{
+    if (bits == 64)
+        return va;
+
+    ASSERT(bits > 0 && bits < 64);
+    ASSERT(address_is_valid(va, bits, true));
+
+    v_uintptr a = va & ((1ULL << bits) - 1);
+
+    DEBUG_ASSERT(address_is_valid(a, bits, false));
+
+    return a;
+}
 
 
 /*

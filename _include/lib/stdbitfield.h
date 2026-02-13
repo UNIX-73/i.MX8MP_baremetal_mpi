@@ -19,7 +19,6 @@ typedef unsigned long long bitfield64;
     (((N) + BITFIELD_CAPACITY(bf_type) - 1) / BITFIELD_CAPACITY(bf_type))
 
 
-#define bitfield_bit_size(bf) (sizeof(bf) * 8)
 
 
 #define bitfield_get(bf, bit_n) (((bf) >> (bit_n)) & (typeof(bf))1)

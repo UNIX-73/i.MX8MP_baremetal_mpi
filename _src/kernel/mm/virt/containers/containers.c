@@ -7,7 +7,6 @@
 
 #include "../../malloc/early_kalloc.h"
 #include "../../malloc/reserve_malloc.h"
-#include "../../mm_info.h"
 
 
 static vmalloc_container* first_fva_container;
@@ -20,7 +19,7 @@ typedef enum {
 } vmalloc_container_enum;
 
 
-static inline vmalloc_container* alloc_container(vmalloc_container* last)
+static inline vmalloc_container* vmalloc_container_new(vmalloc_container* last)
 {
     DEBUG_ASSERT(last);
 
@@ -42,7 +41,7 @@ static inline vmalloc_container* alloc_container(vmalloc_container* last)
 }
 
 
-static inline void* vmaloc_get_new(vmalloc_container* first, const vmalloc_container_enum e)
+static inline void* vmaloc_node_new(vmalloc_container* first, const vmalloc_container_enum e)
 {
 #ifdef DEBUG
     DEBUG_ASSERT(first);
@@ -58,7 +57,7 @@ static inline void* vmaloc_get_new(vmalloc_container* first, const vmalloc_conta
     size_t count = (e == VMALLOC_FVA) ? FVA_NODE_COUNT : RVA_NODE_COUNT;
 
 
-find_empty:
+find:
     while (cur) {
         if (e == VMALLOC_FVA) {
             fva_nodes = &cur->fva.data.nodes[0];
@@ -89,13 +88,13 @@ find_empty:
     DEBUG_ASSERT(x++ == 0);
 #endif
 
-    cur = alloc_container(prev); // it updates prev->next inside
+    cur = vmalloc_container_new(prev); // it updates prev->next inside
 
-    goto find_empty;
+    goto find;
 }
 
 
-static inline void free_container(vmalloc_container* first, vmalloc_container* to_free)
+static inline void container_free(vmalloc_container* first, vmalloc_container* to_free)
 {
     DEBUG_ASSERT(first && to_free);
 
@@ -118,7 +117,7 @@ static inline void free_container(vmalloc_container* first, vmalloc_container* t
 }
 
 
-fva_node* vmalloc_init_containers()
+void vmalloc_init_containers()
 {
     first_fva_container =
         mm_kpa_to_kva_ptr(early_kalloc(sizeof(vmalloc_container), "vmalloc fva", true, false));
@@ -128,27 +127,12 @@ fva_node* vmalloc_init_containers()
 
     *first_fva_container = (vmalloc_container) {0};
     *first_rva_container = (vmalloc_container) {0};
-
-
-    // set as free all the kernel virtual memory
-    fva_node* fva = get_new_fva_node();
-
-
-    fva->start = KERNEL_BASE;
-    fva->size = ~(uint64)0 - KERNEL_BASE + 1; // + 1 because ~0 is not inclusive
-
-
-    ASSERT(KERNEL_BASE + fva->size - 1 == MM_KSECTIONS.heap.end);
-    ASSERT(bitfield_get(first_fva_container->fva.data.reserved_nodes[0], 0) == true);
-    fva_node* first_fva_node = &first_fva_container->fva.data.nodes[0];
-
-    return first_fva_node;
 }
 
 
 fva_node* get_new_fva_node()
 {
-    fva_node* fva = vmaloc_get_new(first_fva_container, VMALLOC_FVA);
+    fva_node* fva = vmaloc_node_new(first_fva_container, VMALLOC_FVA);
 
     DEBUG_ASSERT((v_uintptr)fva % _Alignof(fva_node) == 0);
 
@@ -158,7 +142,7 @@ fva_node* get_new_fva_node()
 
 rva_node* get_new_rva_node()
 {
-    rva_node* rva = vmaloc_get_new(first_rva_container, VMALLOC_RVA);
+    rva_node* rva = vmaloc_node_new(first_rva_container, VMALLOC_RVA);
 
     DEBUG_ASSERT((v_uintptr)rva % _Alignof(rva_node) == 0);
 
@@ -196,7 +180,7 @@ void free_fva_node(fva_node* node)
         if (reserved_nodes[i] != 0)
             return;
 
-    free_container(first_fva_container, container);
+    container_free(first_fva_container, container);
 }
 
 void free_rva_node(rva_node* node)
@@ -207,6 +191,8 @@ void free_rva_node(rva_node* node)
     rva_container_data* c = (rva_container_data*)&container->rva.data;
 
     size_t i = (size_t)(node - c->nodes);
+
+    DEBUG_ASSERT(node == &c->nodes[i]);
 
     bf* reserved_nodes = c->reserved_nodes;
 
@@ -229,5 +215,5 @@ void free_rva_node(rva_node* node)
         if (reserved_nodes[i] != 0)
             return;
 
-    free_container(first_rva_container, container);
+    container_free(first_rva_container, container);
 }

@@ -17,12 +17,22 @@
 #include "reserve_malloc.h"
 
 
-const raw_kmalloc_cfg RAW_KMALLOC_DEFAULT_CFG = (raw_kmalloc_cfg) {
+const raw_kmalloc_cfg RAW_KMALLOC_KMAP_CFG = (raw_kmalloc_cfg) {
+    .assign_pa = true,
+    .fill_reserve = true,
+    .device_mem = false,
+    .permanent = false,
+    .kmap = true,
+    .init_zeroed = false,
+};
+
+const raw_kmalloc_cfg RAW_KMALLOC_DYNAMIC_CFG = (raw_kmalloc_cfg) {
     .assign_pa = true,
     .fill_reserve = true,
     .device_mem = false,
     .permanent = false,
     .kmap = false,
+    .init_zeroed = false,
 };
 
 
@@ -139,7 +149,7 @@ void* raw_kmalloc(size_t pages, const char* tag, const raw_kmalloc_cfg* cfg)
 {
     void* va;
 
-    cfg = (cfg != NULL) ? cfg : &RAW_KMALLOC_DEFAULT_CFG;
+    cfg = (cfg != NULL) ? cfg : &RAW_KMALLOC_DYNAMIC_CFG;
 
     ASSERT(cfg->assign_pa, "TODO: dynamic mapping not implemented yet");
 
@@ -152,18 +162,87 @@ void* raw_kmalloc(size_t pages, const char* tag, const raw_kmalloc_cfg* cfg)
             va = raw_kmalloc_dynamic(pages, tag, cfg);
         }
 
+        DEBUG_ASSERT((v_uintptr)va % KPAGE_ALIGN == 0);
+
         if (cfg->fill_reserve)
             reserve_malloc_fill();
+    }
+
+    if (cfg->init_zeroed) {
+        uint64* ptr = (uint64*)va;
+
+        // TODO: memzero
+        for (size_t i = 0; i < pages * (KPAGE_SIZE / sizeof(uint64)); i++)
+            ptr[i] = 0;
     }
 
     return va;
 }
 
 
+typedef struct {
+    v_uintptr kfree_ptr;
+    size_t kfree_bytes;
+} kfree_peek_args;
+
+static bool mmu_peek_dynamic_kfree_cb(mmu_peek_data data, void* args)
+{
+    kfree_peek_args* a = args;
+
+    DEBUG_ASSERT(a);
+
+    v_uintptr start = a->kfree_ptr;
+    size_t bytes = a->kfree_bytes;
+    v_uintptr end = start + bytes;
+
+    if (data.valid) {
+        if (start <= data.va && data.va <= end) {
+            page_free((mm_page) {
+                .pa = data.pa,
+                .order = data.bytes / KPAGE_SIZE,
+            });
+        }
+    }
+
+    return true;
+}
+
 void raw_kfree(void* ptr)
 {
-    (void)ptr;
+    v_uintptr va = (v_uintptr)ptr;
+    vmalloc_allocated_area_mdt vinfo;
+    bool result;
+
     corelocked(&lock)
     {
+        size_t bytes = vfree(va, &vinfo);
+
+        if (vinfo.kmapped) {
+            DEBUG_ASSERT(is_pow2(bytes));
+
+            page_free((mm_page) {
+                .pa = mm_kva_to_kpa(va),
+                .order = log2_floor(bytes / KPAGE_SIZE),
+            });
+
+
+            if (vinfo.pa_assigned) {
+                result = mmu_unmap(&mm_mmu_h, va, bytes, NULL);
+                ASSERT(result);
+            }
+        }
+        //  dynamic
+        else {
+            kfree_peek_args args = (kfree_peek_args) {
+                .kfree_ptr = va,
+                .kfree_bytes = bytes,
+            };
+
+            result = mmu_peek(&mm_mmu_h, va, bytes, mmu_peek_dynamic_kfree_cb, &args);
+            ASSERT(result);
+
+            result = mmu_unmap(&mm_mmu_h, va, bytes, NULL);
+            ASSERT(result);
+        }
     }
 }

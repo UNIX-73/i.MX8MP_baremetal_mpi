@@ -1,61 +1,101 @@
 #include "vmalloc.h"
 
+#include <arm/mmu/mmu.h>
+#include <kernel/io/term.h>
 #include <kernel/mm.h>
 #include <kernel/panic.h>
 #include <lib/math.h>
 #include <lib/mem.h>
+#include <lib/stdbool.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 
 #include "../mm_info.h"
 #include "containers/containers.h"
-#include "kernel/io/term.h"
-#include "lib/stdbool.h"
+#include "lib/align.h"
+#include "lib/unit/mem.h"
 
-static v_uintptr reserve_from_fva_node(fva_node* cur, fva_node* prev, v_uintptr va, size_t bytes);
-static void push_rva(size_t pages, v_uintptr start, const char* tag, vmalloc_cfg cfg);
+typedef enum {
+    KMAP_LIST,    // reserves exactly the provided v address, if not free, panics
+    DYNAMIC_LIST, // reserves any address bigger or equal than v
+} vmalloc_lists;
 
-static fva_node* first_fva_node;
-static rva_node* first_rva_node;
+
+static v_uintptr pop_fva(const vmalloc_lists l, size_t pages, p_uintptr p);
+static v_uintptr reserve_from_fva_node(fva_node** first, fva_node* cur, fva_node* prev,
+                                       v_uintptr va, size_t bytes);
+static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
+                     vmalloc_cfg cfg);
 
 
-static inline v_uintptr add_no_overflow(v_uintptr va, size_t size)
+static fva_node* fva_kmap_list;
+static fva_node* fva_dynamic_list;
+
+static rva_node* rva_kmap_list;
+static rva_node* rva_dynamic_list;
+
+
+static inline v_uintptr vunsign(v_uintptr va)
 {
-    v_uintptr v = va + size;
+    return va_zero_extend(va, mmu_hi_va_bits(&mm_mmu_h));
+}
 
-    return v >= va ? v : ~(v_uintptr)0;
+static inline v_uintptr vsign(v_uintptr va)
+{
+    return va_sign_extend(va, mmu_hi_va_bits(&mm_mmu_h));
+}
+
+
+// the provided va must be unsigned
+static inline vmalloc_lists list_from_va(v_uintptr uva)
+{
+    v_uintptr addr_space_end = vunsign(mm_kpa_to_kva(mm_info_mm_addr_space()));
+
+    return uva < addr_space_end ? KMAP_LIST : DYNAMIC_LIST;
 }
 
 
 void vmalloc_init()
 {
-    first_fva_node = vmalloc_init_containers();
-    first_rva_node = NULL;
+    vmalloc_init_containers();
+
+    fva_kmap_list = get_new_fva_node();
+    fva_dynamic_list = get_new_fva_node();
+
+    *fva_kmap_list = (fva_node) {
+        .next = NULL,
+        .start = vunsign(mm_kpa_to_kva(0x0)),
+        .size = mm_kpa_to_kva(mm_info_mm_addr_space()) - mm_kpa_to_kva(0x0),
+    };
+
+    *fva_dynamic_list = (fva_node) {
+        .next = NULL,
+        .start = vunsign(mm_kpa_to_kva(mm_info_mm_addr_space())),
+        .size = vunsign(~(v_uintptr)0) - vunsign(mm_kpa_to_kva(mm_info_mm_addr_space())) + 1,
+    };
+
+    rva_kmap_list = NULL;
+    rva_dynamic_list = NULL;
 }
 
 
 v_uintptr vmalloc_update_memblocks(const memblock* mblcks, size_t n)
 {
-    ASSERT(first_fva_node, "vmalloc: not initialized");
-    ASSERT(first_fva_node->next == NULL, "vmalloc: not initialized");
+    ASSERT(fva_kmap_list && fva_dynamic_list, "vmalloc: not initialized");
+    ASSERT(fva_kmap_list->next == NULL && fva_dynamic_list->next == NULL,
+           "vmalloc: not initialized");
 
     v_uintptr va = 0;
     memblock mb;
 
-    fva_node* cur = first_fva_node;
-    fva_node* prev = NULL;
-
-
     for (size_t i = 0; i < n; i++) {
         mb = mblcks[i];
 
-        v_uintptr target = mm_kpa_to_kva(mb.addr);
+        va = pop_fva(KMAP_LIST, mb.blocks, mb.addr);
 
-        va = reserve_from_fva_node(cur, prev, target, mb.blocks * KPAGE_SIZE);
+        ASSERT(ptrs_are_kmapped(pv_ptr_new(mb.addr, vsign(va))));
 
-        ASSERT(ptrs_are_kmapped(pv_ptr_new(mb.addr, va)));
-
-        push_rva(mb.blocks, va, mm_kpa_to_kva_ptr(mb.tag),
+        push_rva(KMAP_LIST, mb.blocks, va, mm_kpa_to_kva_ptr(mb.tag),
                  (vmalloc_cfg) {
                      .kmap =
                          {
@@ -68,23 +108,21 @@ v_uintptr vmalloc_update_memblocks(const memblock* mblcks, size_t n)
                  });
     }
 
-    return va + (mb.blocks * KPAGE_SIZE);
+    return vsign(va + (mb.blocks * KPAGE_SIZE));
 }
 
 
-typedef enum {
-    POP_FVA_MIN_START, // reserve any address bigger or equal than v
-    POP_FVA_EXACT_VA,  // reserve exactly the provided v address, if not free panic
-} pop_fva_options;
-
-
-static v_uintptr reserve_from_fva_node(fva_node* cur, fva_node* prev, v_uintptr va, size_t bytes)
+static v_uintptr reserve_from_fva_node(fva_node** list, fva_node* cur, fva_node* prev, v_uintptr va,
+                                       size_t bytes)
 {
+    DEBUG_ASSERT(address_is_valid(va, mmu_hi_va_bits(&mm_mmu_h), false),
+                 "reserve_from_fva_node: only unsigned va supported to avoid overflow");
+
     v_uintptr cur_start = cur->start;
     v_uintptr cur_end = cur->start + cur->size;
 
 
-    DEBUG_ASSERT(cur_start <= va && va + bytes <= add_no_overflow(cur_start, cur->size));
+    DEBUG_ASSERT(cur_start <= va && va + bytes <= cur_start + cur->size);
 
 
     // get full node
@@ -92,7 +130,7 @@ static v_uintptr reserve_from_fva_node(fva_node* cur, fva_node* prev, v_uintptr 
         if (prev)
             prev->next = cur->next;
         else
-            first_fva_node = cur->next;
+            *list = cur->next;
 
         free_fva_node(cur);
         return va;
@@ -125,52 +163,89 @@ static v_uintptr reserve_from_fva_node(fva_node* cur, fva_node* prev, v_uintptr 
 }
 
 
-static v_uintptr pop_fva(size_t pages, const pop_fva_options options, v_uintptr v)
+static const size_t PAGE_L3 = MEM_KiB * 4;
+static const size_t PAGE_L2 = PAGE_L3 * 512;
+static const size_t PAGE_L1 = PAGE_L2 * 512;
+
+
+static inline bool dynamic_fits_page_aligned(const size_t PAGE_ALIGN, size_t bytes,
+                                             v_uintptr cur_start, v_uintptr cur_end)
 {
-    DEBUG_ASSERT(first_fva_node, "vmalloc: no available free va");
+    v_uintptr aligned = align_up(cur_start, PAGE_ALIGN);
+
+    if (aligned < cur_start)
+        return false; // overflow
+
+    if (aligned >= cur_end)
+        return false; // out of range
+
+    return aligned + bytes <= cur_end;
+}
+
+
+/// p: the requested physical address in case of KMAP_LIST, else ignored
+static v_uintptr pop_fva(const vmalloc_lists l, size_t pages, p_uintptr p)
+{
+    fva_node** const list = (l == KMAP_LIST) ? &fva_kmap_list : &fva_dynamic_list;
+
+    DEBUG_ASSERT(list, "vmalloc: no available free va");
 
     size_t bytes = pages * KPAGE_SIZE;
-    fva_node* cur = first_fva_node;
+    fva_node* cur = *list;
     fva_node* prev = NULL;
+
+    v_uintptr kmap_va = l == KMAP_LIST ? vunsign(mm_kpa_to_kva(p)) : (v_uintptr)NULL;
+    fva_node *fits_dynamic_unaligned = NULL, *fits_dynamic_unaligned_prev = NULL;
+    size_t PAGE_ALIGN;
+    if (bytes >= PAGE_L1)
+        PAGE_ALIGN = PAGE_L1;
+    else if (bytes >= PAGE_L2)
+        PAGE_ALIGN = PAGE_L2;
+    else
+        PAGE_ALIGN = PAGE_L3;
 
     while (cur) {
         v_uintptr cur_start = cur->start;
-        v_uintptr cur_end = add_no_overflow(cur_start, cur->size);
+        v_uintptr cur_size = cur->size;
+        v_uintptr cur_end = cur_start + cur_size;
 
 
-        bool fits = false;
-        v_uintptr va = 0;
-
-        if (options == POP_FVA_EXACT_VA) {
-            if (cur_start <= v && add_no_overflow(v, bytes) <= cur_end) {
-                fits = true;
-                va = v;
-            }
+        if (l == KMAP_LIST) {
+            if (cur_start <= kmap_va && cur_end >= kmap_va + bytes)
+                return reserve_from_fva_node(list, cur, prev, kmap_va, bytes);
         }
-        /*  options == POP_FVA_MIN_START
-         */
+        //  l == KMAP_DYNAMIC
         else {
-            v_uintptr attempt = (cur_start < v) ? v : cur_start;
-            if (attempt + bytes <= cur_end) {
-                fits = true;
-                va = attempt;
+            if (bytes <= cur_size) {
+                if (cur_size >= PAGE_ALIGN &&
+                    dynamic_fits_page_aligned(PAGE_ALIGN, bytes, cur_start, cur_end))
+                    return reserve_from_fva_node(list, cur, prev, align_up(cur_start, PAGE_ALIGN),
+                                                 bytes);
+
+                if (!fits_dynamic_unaligned) {
+                    fits_dynamic_unaligned = cur;
+                    fits_dynamic_unaligned_prev = prev;
+                }
             }
         }
-
-        if (fits)
-            return reserve_from_fva_node(cur, prev, va, bytes);
 
         prev = cur;
         cur = cur->next;
     }
 
+    if (l == DYNAMIC_LIST && fits_dynamic_unaligned) {
+        return reserve_from_fva_node(list, fits_dynamic_unaligned, fits_dynamic_unaligned_prev,
+                                     fits_dynamic_unaligned->start, bytes);
+    }
+
     PANIC("vmalloc: no available free virtual address range found");
 }
 
-static void push_fva(v_uintptr va, size_t pages)
+
+static void push_fva(const vmalloc_lists l, v_uintptr va, size_t bytes)
 {
-    size_t bytes = pages * KPAGE_SIZE;
-    fva_node* cur = first_fva_node;
+    fva_node** const list = (l == KMAP_LIST) ? &fva_kmap_list : &fva_dynamic_list;
+    fva_node* cur = *list;
     fva_node* prev = NULL;
 
 
@@ -221,41 +296,68 @@ static void push_fva(v_uintptr va, size_t pages)
     if (prev)
         prev->next = node;
     else
-        first_fva_node = node;
+        *list = node;
+}
+
+
+static bool find_rva(const vmalloc_lists l, v_uintptr start, rva_node** node, rva_node** prev)
+{
+    rva_node* c = (l == KMAP_LIST) ? rva_kmap_list : rva_dynamic_list;
+    rva_node* p = NULL;
+
+    while (node) {
+        if (c->start == start) {
+            if (node)
+                *node = c;
+            if (prev)
+                *prev = p;
+
+            return true;
+        }
+
+        p = c;
+        c = c->next;
+    }
+
+    return false;
 }
 
 
 // returns the size in bytes of the reserved va
-static size_t pop_rva(v_uintptr start)
+static size_t pop_rva(const vmalloc_lists l, v_uintptr start, vmalloc_allocated_area_mdt* info)
 {
-    rva_node* cur = first_rva_node;
+    rva_node *node, *prev;
 
-    while (cur) {
-        if (cur->start == start) {
-            if (cur == first_rva_node)
-                first_rva_node = cur->next;
+    bool found = find_rva(l, start, &node, &prev);
+    ASSERT(found, "vmalloc: attempted to free an unreserved virtual address");
+    ASSERT(!node->mdt.info.permanent, "vmalloc: cannot free a permanent va");
 
-            ASSERT(!cur->info.permanent, "vmalloc: cannot free a permanent va");
+    size_t size = node->size;
 
-            size_t size = cur->size;
+    if (info)
+        *info = node->mdt.info;
 
-            free_rva_node(cur);
+    if (prev)
+        prev->next = node->next;
+    else
+        *((l == KMAP_LIST) ? &rva_kmap_list : &rva_dynamic_list) = node->next;
 
-            return size;
-        }
+    free_rva_node(node);
 
-        cur = cur->next;
-    }
-
-    PANIC("vmalloc: attempted to free an unreserved virtual address");
+    return size;
 }
 
 
-static void push_rva(size_t pages, v_uintptr start, const char* tag, vmalloc_cfg cfg)
+static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
+                     vmalloc_cfg cfg)
 {
+    DEBUG_ASSERT((cfg.kmap.use_kmap && l == KMAP_LIST) ||
+                 (!cfg.kmap.use_kmap && l == DYNAMIC_LIST));
+
+
     size_t bytes = pages * KPAGE_SIZE;
 
-    rva_node* cur = first_rva_node;
+    rva_node* cur = (l == KMAP_LIST) ? rva_kmap_list : rva_dynamic_list;
     rva_node* prev = NULL;
 
     while (cur && cur->start < start) {
@@ -277,101 +379,135 @@ static void push_rva(size_t pages, v_uintptr start, const char* tag, vmalloc_cfg
         .next = cur,
         .start = start,
         .size = bytes,
-        .info =
+        .mdt =
             {
-                .tag = tag,
-                .kmapped = cfg.kmap.use_kmap,
-                .pa_assigned = cfg.assing_pa,
-                .device_mem = cfg.device_mem,
-                .permanent = cfg.permanent,
+                .info =
+                    {
+                        .tag = tag,
+                        .kmapped = cfg.kmap.use_kmap,
+                        .pa_assigned = cfg.assing_pa,
+                        .device_mem = cfg.device_mem,
+                        .permanent = cfg.permanent,
+                    },
+                .pa_mdt = NULL,
             },
     };
 
     if (prev)
         prev->next = node;
     else
-        first_rva_node = node;
+        *((l == KMAP_LIST) ? &rva_kmap_list : &rva_dynamic_list) = node;
 }
 
 
 v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg)
 {
-    pop_fva_options opt;
-    v_uintptr v;
+    vmalloc_lists l = cfg.kmap.use_kmap ? KMAP_LIST : DYNAMIC_LIST;
+
 
     if (cfg.kmap.use_kmap) {
         ASSERT(is_pow2(pages), "vmalloc: only pow2 n pages can be requested for kmapping");
         ASSERT(cfg.assing_pa, "vmalloc: kmap can only be configured with assign_pa = true");
-
-        opt = POP_FVA_EXACT_VA;
-        v = mm_kpa_to_kva(cfg.kmap.kmap_pa);
-    }
-    else {
-        opt = POP_FVA_MIN_START;
-        v = mm_kpa_to_kva(mm_info_ddr_end());
     }
 
 
-    v_uintptr start = pop_fva(pages, opt, v);
+    v_uintptr start = pop_fva(l, pages, cfg.kmap.kmap_pa);
 
 #ifdef DEBUG
     if (cfg.kmap.use_kmap)
-        DEBUG_ASSERT(start == v);
+        DEBUG_ASSERT(start == vunsign(mm_kpa_to_kva(cfg.kmap.kmap_pa)));
     else
-        DEBUG_ASSERT(start >= v);
+        DEBUG_ASSERT(start >= vunsign(mm_kpa_to_kva(mm_info_mm_addr_space())));
 #endif
 
-    push_rva(pages, start, tag, cfg);
+    push_rva(l, pages, start, tag, cfg);
 
 
-    return start;
+    return vsign(start);
 }
 
 
-void vfree(v_uintptr va)
+size_t vfree(v_uintptr va, vmalloc_allocated_area_mdt* info)
 {
-    size_t size = pop_rva(va);
-    DEBUG_ASSERT(size % KPAGE_SIZE == 0);
-    push_fva(va, size / KPAGE_SIZE);
+    v_uintptr uva = vunsign(va);
+    vmalloc_lists l = list_from_va(uva);
+
+    size_t bytes = pop_rva(l, uva, info);
+    push_fva(l, uva, bytes);
+
+    return bytes;
 }
 
 
 size_t vmalloc_get_free_bytes()
 {
-    size_t s = 0;
-    fva_node* cur = first_fva_node;
+    size_t b = 0;
 
-    while (cur) {
-        s += cur->size;
-        cur = cur->next;
+    fva_node* lists[2] = {fva_kmap_list, fva_dynamic_list};
+    fva_node* cur;
+
+    for (size_t i = 0; i < 2; i++) {
+        cur = lists[i];
+
+        while (cur) {
+            b += cur->size;
+            cur = cur->next;
+        }
     }
 
-    return s;
+    return b;
 }
 
 
 size_t vmalloc_get_reserved_bytes()
 {
-    size_t s = 0;
-    rva_node* cur = first_rva_node;
+    size_t b = 0;
 
-    while (cur) {
-        s += cur->size;
-        cur = cur->next;
+    rva_node* lists[2] = {rva_kmap_list, rva_dynamic_list};
+    rva_node* cur;
+
+    for (size_t i = 0; i < 2; i++) {
+        cur = lists[i];
+
+        while (cur) {
+            b += cur->size;
+            cur = cur->next;
+        }
     }
 
-    return s;
+    return b;
+}
+
+
+const char* vmalloc_update_tag(void* addr, const char* new_tag)
+{
+    ASSERT(addr);
+
+    rva_node *node, *prev;
+
+    v_uintptr va = vunsign((v_uintptr)addr);
+
+    bool found = find_rva(list_from_va(va), va, &node, &prev);
+    ASSERT(found, "vmalloc_update_tag: requested va not allocated");
+
+    const char* old_tag = node->mdt.info.tag;
+    node->mdt.info.tag = new_tag;
+
+    return old_tag;
 }
 
 
 vmalloc_va_info vmalloc_get_addr_info(void* addr)
 {
-    v_uintptr a = (v_uintptr)addr;
+    v_uintptr a = vunsign((v_uintptr)addr);
+    vmalloc_lists l = list_from_va(a);
 
-    fva_node* fcur = first_fva_node;
+
+    fva_node* fcur = l == KMAP_LIST ? fva_kmap_list : fva_dynamic_list;
+
     while (fcur) {
         v_uintptr start = fcur->start;
-        v_uintptr end = add_no_overflow(start, fcur->size);
+        v_uintptr end = start + fcur->size;
 
         if (start > a)
             break;
@@ -379,7 +515,7 @@ vmalloc_va_info vmalloc_get_addr_info(void* addr)
         if (end > a) {
             return (vmalloc_va_info) {.state = VMALLOC_VA_INFO_FREE,
                                       .state_info = {.free = {
-                                                         .free_start = start,
+                                                         .free_start = vsign(start),
                                                          .free_size = fcur->size,
                                                      }}};
         }
@@ -387,10 +523,12 @@ vmalloc_va_info vmalloc_get_addr_info(void* addr)
         fcur = fcur->next;
     }
 
-    rva_node* rcur = first_rva_node;
+
+    rva_node* rcur = l == KMAP_LIST ? rva_kmap_list : rva_dynamic_list;
+
     while (rcur) {
         v_uintptr start = rcur->start;
-        v_uintptr end = add_no_overflow(start, rcur->size);
+        v_uintptr end = start + rcur->size;
 
         if (start > a)
             break;
@@ -398,9 +536,9 @@ vmalloc_va_info vmalloc_get_addr_info(void* addr)
         if (end > a) {
             return (vmalloc_va_info) {.state = VMALLOC_VA_INFO_RESERVED,
                                       .state_info = {.reserved = {
-                                                         .reserved_start = start,
+                                                         .reserved_start = vsign(start),
                                                          .reserved_size = rcur->size,
-                                                         .info = rcur->info,
+                                                         .mdt = rcur->mdt,
                                                      }}};
         }
 
@@ -413,25 +551,42 @@ vmalloc_va_info vmalloc_get_addr_info(void* addr)
 
 void vmalloc_debug_free()
 {
+    size_t va_bits = mmu_hi_va_bits(&mm_mmu_h);
+    v_uintptr mask = (1ULL << va_bits) - 1;
+
     term_printf("\n\r");
     term_printf("=============================================\n\r");
     term_printf("           VMALLOC - FREE REGIONS            \n\r");
     term_printf("=============================================\n\r");
     term_printf("   START              END                SIZE (bytes / pages)\n\r");
     term_printf("-------------------------------------------------------------\n\r");
+    term_printf("[K == kmapped, - == dynamic]\n\r");
 
     size_t total = 0;
-    fva_node* cur = first_fva_node;
+    fva_node* lists[2] = {fva_kmap_list, fva_dynamic_list};
 
-    while (cur) {
-        v_uintptr start = cur->start;
-        v_uintptr end = add_no_overflow(start, cur->size);
-        size_t pages = cur->size / KPAGE_SIZE;
+    for (size_t i = 0; i < 2; i++) {
+        fva_node* cur = lists[i];
+        char k = i == KMAP_LIST ? 'K' : '-'; // kmapped char
 
-        term_printf("   [%p - %p)   %p B  (%p pages)\n\r", start, end, cur->size, pages);
+        while (cur) {
+            v_uintptr start = cur->start;
+            v_uintptr end = start + cur->size;
 
-        total += cur->size;
-        cur = cur->next;
+            if ((end & ~mask) != 0) // overflow
+                end = mask;
+
+            start = vsign(start);
+            end = vsign(end);
+
+            size_t pages = cur->size / KPAGE_SIZE;
+
+            term_printf("   [%p - %p)   %p B  (%p pages)    [%c]\n\r", start, end, cur->size, pages,
+                        k);
+
+            total += cur->size;
+            cur = cur->next;
+        }
     }
 
     term_printf("-------------------------------------------------------------\n\r");
@@ -442,6 +597,9 @@ void vmalloc_debug_free()
 
 void vmalloc_debug_reserved()
 {
+    size_t va_bits = mmu_hi_va_bits(&mm_mmu_h);
+    v_uintptr mask = (1ULL << va_bits) - 1;
+
     term_printf("\n\r");
     term_printf("=============================================\n\r");
     term_printf("         VMALLOC - RESERVED REGIONS\n\r");
@@ -450,26 +608,34 @@ void vmalloc_debug_reserved()
     term_printf("-------------------------------------------------------------\n\r");
 
     size_t total = 0;
-    rva_node* cur = first_rva_node;
+    rva_node* lists[2] = {rva_kmap_list, rva_dynamic_list};
 
-    while (cur) {
-        v_uintptr start = cur->start;
-        v_uintptr end = add_no_overflow(start, cur->size);
-        size_t pages = cur->size / KPAGE_SIZE;
+    for (size_t i = 0; i < 2; i++) {
+        rva_node* cur = lists[i];
 
-        term_printf("   [%p - %p)   %p B (%d p)   ", start, end, cur->size, pages);
+        while (cur) {
+            v_uintptr start = cur->start;
+            v_uintptr end = start + cur->size;
 
-        term_printf("[");
-        term_printf("%c", cur->info.kmapped ? 'K' : '-');
-        term_printf("%c", cur->info.pa_assigned ? 'P' : '-');
-        term_printf("%c", cur->info.device_mem ? 'D' : '-');
-        term_printf("%c", cur->info.permanent ? '!' : '-');
-        term_printf("]");
+            if ((end & ~mask) != 0) // overflow
+                end = mask;
 
-        term_printf("\t%s\n\r", cur->info.tag);
+            start = vsign(start);
+            end = vsign(end);
 
-        total += cur->size;
-        cur = cur->next;
+            size_t pages = cur->size / KPAGE_SIZE;
+
+            term_printf("   [%p - %p)   %p B (%d p)   ", start, end, cur->size, pages);
+            term_printf("[%c", cur->mdt.info.kmapped ? 'K' : '-');
+            term_printf("%c", cur->mdt.info.pa_assigned ? 'P' : '-');
+            term_printf("%c", cur->mdt.info.device_mem ? 'D' : '-');
+            term_printf("%c]", cur->mdt.info.permanent ? '!' : '-');
+
+            term_printf("\t%s\n\r", cur->mdt.info.tag);
+
+            total += cur->size;
+            cur = cur->next;
+        }
     }
 
     term_printf("-------------------------------------------------------------\n\r");

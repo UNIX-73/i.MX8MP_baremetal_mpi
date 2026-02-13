@@ -20,25 +20,33 @@ typedef struct {
     bool permanent;
 } vmalloc_cfg;
 
-
-v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg);
-void vfree(v_uintptr va);
-
-
 typedef struct {
     const char* tag;
     bool kmapped;
     bool pa_assigned;
     bool device_mem;
     bool permanent;
-} vmalloc_allocated_area_info;
+} vmalloc_allocated_area_mdt;
 
+v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg);
+
+/// frees an allocated area, returns the byte count of the area. If provided a not null info, also
+/// provides the freed area info
+size_t vfree(v_uintptr va, vmalloc_allocated_area_mdt* info);
 
 typedef enum {
     VMALLOC_VA_INFO_FREE,
     VMALLOC_VA_INFO_RESERVED,
     VMALLOC_VA_UNREGISTERED,
 } vmalloc_va_info_state;
+
+
+struct vmalloc_pa_mdt; // forward decl
+
+typedef struct {
+    vmalloc_allocated_area_mdt info;
+    struct vmalloc_pa_mdt* pa_mdt;
+} vmalloc_mdt;
 
 typedef struct {
     vmalloc_va_info_state state;
@@ -51,11 +59,13 @@ typedef struct {
         struct {
             v_uintptr reserved_start;
             size_t reserved_size;
-            vmalloc_allocated_area_info info;
+            vmalloc_mdt mdt;
         } reserved;
     } state_info;
 } vmalloc_va_info;
 
+
+const char* vmalloc_update_tag(void* addr, const char* new_tag);
 
 vmalloc_va_info vmalloc_get_addr_info(void* addr);
 
