@@ -20,7 +20,7 @@
 /// identity mapping without the mmu still enabled
 static void* im_alloc(size_t bytes, size_t alignment)
 {
-    p_uintptr v = early_kalloc(bytes, "mmu_early_identity_mapping_tbl", false, false);
+    p_uintptr v = early_kalloc(bytes, "mmu table", false, false);
 
     ASSERT(v % alignment == 0);
 

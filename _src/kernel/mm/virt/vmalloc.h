@@ -28,11 +28,24 @@ typedef struct {
     bool permanent;
 } vmalloc_allocated_area_mdt;
 
-v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg);
+
+/// its just a quick access to the node to avoid the search of the node location.
+typedef struct {
+    void* rva_;
+} vmalloc_token;
+
+
+vmalloc_token vmalloc_get_token(void* allocation_addr);
+v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg, vmalloc_token* t);
+
 
 /// frees an allocated area, returns the byte count of the area. If provided a not null info, also
 /// provides the freed area info
-size_t vfree(v_uintptr va, vmalloc_allocated_area_mdt* info);
+size_t __vmalloc_token__vfree(vmalloc_token t, vmalloc_allocated_area_mdt* info);
+size_t __voidptr__vfree(void* va, vmalloc_allocated_area_mdt* info);
+#define vfree(T, info) \
+    _Generic((T), vmalloc_token: __vmalloc_token__vfree, void*: __voidptr__vfree)(T, info)
+
 
 typedef enum {
     VMALLOC_VA_INFO_FREE,
@@ -45,7 +58,11 @@ struct vmalloc_pa_mdt; // forward decl
 
 typedef struct {
     vmalloc_allocated_area_mdt info;
-    struct vmalloc_pa_mdt* pa_mdt;
+
+    struct {
+        struct vmalloc_pa_mdt* list;
+        uint32 count;
+    } pa_mdt;
 } vmalloc_mdt;
 
 typedef struct {
@@ -74,3 +91,22 @@ void vmalloc_debug_reserved();
 
 size_t vmalloc_get_free_bytes();
 size_t vmalloc_get_reserved_bytes();
+
+
+vmalloc_allocated_area_mdt __vmalloc_token__vmalloc_get_mdt(vmalloc_token t);
+vmalloc_allocated_area_mdt __voidptr__vmalloc_get_mdt(void* allocation_addr);
+#define vmalloc_get_mdt(T)                               \
+    _Generic((T),                                        \
+        vmalloc_token: __vmalloc_token__vmalloc_get_mdt, \
+        void*: __voidptr__vmalloc_get_mdt)(T)
+
+
+typedef struct {
+    p_uintptr pa;
+    v_uintptr va;
+    size_t order;
+} vmalloc_pa_info;
+
+void vmalloc_push_pa(vmalloc_token t, size_t order, p_uintptr pa, v_uintptr va);
+size_t vmalloc_get_pa_count(vmalloc_token t);
+bool vmalloc_get_pa_info(vmalloc_token t, vmalloc_pa_info* buf, size_t buf_size);

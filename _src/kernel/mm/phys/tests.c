@@ -2,8 +2,6 @@
 
 #ifdef DEBUG
 
-#    include "drivers/uart/uart.h"
-#    include "kernel/devices/drivers.h"
 #    include "kernel/panic.h"
 #    include "page_allocator.h"
 
@@ -27,7 +25,7 @@ void test_single_alloc_free(void)
     mm_page p = page_malloc(0, UNINIT_PAGE);
     TEST_ASSERT(p.order == 0, "alloc order 0 failed");
 
-    page_free(p);
+    page_free(p.pa);
 }
 
 void test_split_to_zero(void)
@@ -35,7 +33,7 @@ void test_split_to_zero(void)
     mm_page p = page_malloc(0, UNINIT_PAGE);
     TEST_ASSERT(p.order == 0, "split to order 0 failed");
 
-    page_free(p);
+    page_free(p.pa);
 }
 
 void test_many_small_allocs(void)
@@ -48,7 +46,7 @@ void test_many_small_allocs(void)
     }
 
     for (size_t i = 0; i < 8; i++)
-        page_free(pages[i]);
+        page_free(pages[i].pa);
 }
 
 void test_mixed_orders(void)
@@ -59,9 +57,9 @@ void test_mixed_orders(void)
     mm_page a = page_malloc(0, UNINIT_PAGE);
     mm_page b = page_malloc(0, UNINIT_PAGE);
 
-    page_free(a);
-    page_free(b);
-    page_free(big);
+    page_free(a.pa);
+    page_free(b.pa);
+    page_free(big.pa);
 }
 
 void test_full_merge(void)
@@ -72,12 +70,12 @@ void test_full_merge(void)
         pages[i] = page_malloc(0, UNINIT_PAGE);
 
     for (size_t i = 0; i < 64; i++)
-        page_free(pages[i]);
+        page_free(pages[i].pa);
 
     mm_page p = page_malloc(PAGE_ALLOCATOR_DEBUG_MAX_ORDER, UNINIT_PAGE);
     TEST_ASSERT(p.order == PAGE_ALLOCATOR_DEBUG_MAX_ORDER, "full merge failed");
 
-    page_free(p);
+    page_free(p.pa);
 }
 
 
@@ -89,10 +87,10 @@ void test_stress_pattern(void)
         a[i] = page_malloc(i % 3, UNINIT_PAGE);
 
     for (size_t i = 0; i < 16; i += 2)
-        page_free(a[i]);
+        page_free(a[i].pa);
 
     for (size_t i = 1; i < 16; i += 2)
-        page_free(a[i]);
+        page_free(a[i].pa);
 }
 
 

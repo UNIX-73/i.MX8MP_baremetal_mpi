@@ -23,7 +23,7 @@ static inline vmalloc_container* vmalloc_container_new(vmalloc_container* last)
 {
     DEBUG_ASSERT(last);
 
-    v_uintptr va = reserve_malloc().va;
+    v_uintptr va = reserve_malloc("vmalloc node container").va;
 
     DEBUG_ASSERT(last->undef.hdr.next == NULL);
     DEBUG_ASSERT((va & (KPAGE_SIZE - 1)) == 0);
@@ -119,10 +119,10 @@ static inline void container_free(vmalloc_container* first, vmalloc_container* t
 
 void vmalloc_init_containers()
 {
-    first_fva_container =
-        mm_kpa_to_kva_ptr(early_kalloc(sizeof(vmalloc_container), "vmalloc fva", true, false));
-    first_rva_container =
-        mm_kpa_to_kva_ptr(early_kalloc(sizeof(vmalloc_container), "vmalloc rva", true, false));
+    first_fva_container = mm_kpa_to_kva_ptr(early_kalloc(
+        sizeof(vmalloc_container), "vmalloc node container (fva first container)", true, false));
+    first_rva_container = mm_kpa_to_kva_ptr(early_kalloc(
+        sizeof(vmalloc_container), "vmalloc node container (rva first container)", true, false));
 
 
     *first_fva_container = (vmalloc_container) {0};

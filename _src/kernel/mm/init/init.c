@@ -39,7 +39,7 @@ static p_uintptr mmu_allocator_fn(size_t bytes, size_t align)
 {
     ASSERT(bytes == KPAGE_SIZE && align == KPAGE_SIZE);
 
-    pv_ptr pv = reserve_malloc();
+    pv_ptr pv = reserve_malloc("mmu table");
 
     return pv.va;
 }

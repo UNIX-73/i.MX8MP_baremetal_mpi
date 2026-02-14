@@ -22,8 +22,6 @@ bool mm_kernel_is_relocated()
 }
 
 
-
-
 p_uintptr mm_kva_to_kpa(v_uintptr va)
 {
     extern p_uintptr _mm_kva_to_kpa(v_uintptr pa);

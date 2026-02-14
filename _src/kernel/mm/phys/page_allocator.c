@@ -48,11 +48,6 @@ static inline size_t buddy_of(size_t i, size_t o)
 }
 
 
-static inline size_t get_parent(size_t i, size_t parent_o)
-{
-    return i & ~((1UL << (parent_o)) - 1);
-}
-
 static inline bool is_in_free_list(size_t i, uint8 o)
 {
     size_t cur = s->free_list[o];
@@ -256,13 +251,13 @@ mm_page page_malloc(size_t order, mm_page_data p)
 }
 
 
-void page_free(mm_page p)
+void page_free(p_uintptr pa)
 {
-    size_t i = p.pa / KPAGE_SIZE;
+    size_t i = pa / KPAGE_SIZE;
 
     ASSERT(i < s->N);
     ASSERT(!s->pages[i].free, "page_allocator: double free");
-    DEBUG_ASSERT(s->pages[i].order == p.order);
+    // DEBUG_ASSERT(s->pages[i].order == order);
 
     s->pages[i].page = UNINIT_PAGE;
 
@@ -287,13 +282,7 @@ void page_free_by_tag(const char* tag)
         if (!strcmp(n->page.tag, tag))
             continue;
 
-        mm_page p = {
-            .pa = i * KPAGE_SIZE,
-            .order = n->order,
-            .data = n->page,
-        };
-
-        page_free(p);
+        page_free(i * KPAGE_SIZE);
     }
 }
 

@@ -2,19 +2,26 @@
 
 #include <kernel/mm.h>
 #include <kernel/panic.h>
+#include <lib/align.h>
+#include <lib/math.h>
 #include <lib/mem.h>
+#include <lib/stdbitfield.h>
 #include <lib/stdint.h>
 #include <lib/stdmacros.h>
 
 #include "../../malloc/reserve_malloc.h"
-#include "lib/math.h"
-#include "lib/stdbitfield.h"
-#include "lib/stdbool.h"
+#include "../../mm_info.h"
 
 
 #define BF_BITS BITFIELD_CAPACITY(mdt_bf)
 
 static vmalloc_mdt_container* container_list;
+
+
+static inline v_uintptr vsign(v_uintptr va)
+{
+    return va_sign_extend(va, mmu_hi_va_bits(&mm_mmu_h));
+}
 
 
 static inline void init_container(vmalloc_mdt_container* c, vmalloc_mdt_container* prev)
@@ -76,7 +83,7 @@ static vmalloc_mdt_container* pa_mdt_container_new(vmalloc_mdt_container* prev)
     DEBUG_ASSERT(prev);
     DEBUG_ASSERT(prev->hdr.next == NULL);
 
-    v_uintptr va = reserve_malloc().va;
+    v_uintptr va = reserve_malloc("vmalloc mdt container").va;
 
     DEBUG_ASSERT((va & (KPAGE_SIZE - 1)) == 0);
 
@@ -93,6 +100,7 @@ static vmalloc_pa_mdt* node_new()
     size_t i, j, k;
     vmalloc_mdt_container *c, *p;
     c = container_list;
+    p = NULL;
 
 find:
     while (c) {
@@ -117,69 +125,88 @@ find:
     goto find;
 }
 
-
+#ifdef DEBUG
 static bool mdt_is_valid(rva_node* n)
 {
-    if (!n->mdt.pa_mdt)
+    if (!n->mdt.pa_mdt.list)
         return true; // no pa assigned
 
     vmalloc_pa_mdt *c, *p;
-    v_uintptr start, end, mdt_start, mdt_end, prev_end;
+    v_uintptr start, end, cur_start, cur_end, prev_end;
 
-    start = n->start;
-    end = n->start + n->size;
+    start = vsign(n->start);
+    end = vsign(n->start + n->size);
 
-    c = n->mdt.pa_mdt;
+    if (!is_aligned(start, KPAGE_ALIGN))
+        return false;
+
+    if (!is_aligned(end, KPAGE_ALIGN))
+        return false;
+
+    c = n->mdt.pa_mdt.list;
     p = NULL;
 
     while (c) {
-        mdt_start = c->va;
-        mdt_end = c->va + (power_of2(c->order) * KPAGE_SIZE);
+        cur_start = c->info.va;
+        cur_end = c->info.va + (power_of2(c->info.order) * KPAGE_SIZE);
 
-        if (mdt_start < start)
+        if (cur_start < start)
             return false;
 
-        if (mdt_end > end)
+        if (cur_end > end)
             return false;
 
-        if (p && mdt_start < prev_end)
+        if (p && cur_start < prev_end)
             return false;
 
+        if (!is_aligned(cur_start, KPAGE_ALIGN))
+            return false;
+
+        if (!is_aligned(cur_end, KPAGE_ALIGN))
+            return false;
+
+
+        prev_end = cur_end;
         p = c;
         c = c->next;
-        prev_end = mdt_end;
     }
 
     return true;
 }
+#endif
 
 
 void vmalloc_pa_mdt_push(rva_node* n, size_t o, p_uintptr pa, v_uintptr va)
 {
     vmalloc_pa_mdt *cur, *prev, *node;
 
+    n->mdt.pa_mdt.count++;
+
     DEBUG_ASSERT(n);
 
     node = node_new();
     *node = (vmalloc_pa_mdt) {
         .next = NULL,
-        .order = o,
-        .pa = pa,
-        .va = va,
+        .info =
+            (vmalloc_pa_info) {
+                .order = o,
+                .pa = pa,
+                .va = va,
+            },
     };
 
-    cur = n->mdt.pa_mdt;
+    cur = n->mdt.pa_mdt.list;
     prev = NULL;
 
     // first node
-    if (!cur || va < cur->va) {
+    if (!cur || va < cur->info.va) {
         node->next = cur;
-        n->mdt.pa_mdt = node;
+        n->mdt.pa_mdt.list = node;
         return;
     }
 
     // search pos by va
-    while (cur && cur->va <= va) {
+    while (cur && cur->info.va <= va) {
         prev = cur;
         cur = cur->next;
     }
@@ -194,18 +221,39 @@ void vmalloc_pa_mdt_push(rva_node* n, size_t o, p_uintptr pa, v_uintptr va)
 }
 
 
-void vmalloc_pa_mdt_pop(rva_node* n)
+void vmalloc_pa_mdt_free(rva_node* n)
 {
     DEBUG_ASSERT(n);
 
-    vmalloc_pa_mdt *cur, *prev;
-
-    cur = n->mdt.pa_mdt;
+    vmalloc_pa_mdt* cur = n->mdt.pa_mdt.list;
 
     while (cur) {
-        
+        vmalloc_mdt_container* c = (void*)align_down((v_uintptr)cur, KPAGE_ALIGN);
+        vmalloc_pa_mdt* next = cur->next;
 
-        prev = cur;
-        cur = cur->next;
+        vmalloc_pa_mdt* base = &c->entries[0];
+
+        size_t i = (size_t)(cur - base);
+
+        DEBUG_ASSERT(&c->entries[i] == cur);
+        DEBUG_ASSERT(bitfield_get(c->reserved_entries[i / BF_BITS], i % BF_BITS));
+
+        bitfield_clear(c->reserved_entries[i / BF_BITS], i % BF_BITS);
+
+
+        bool empty_container = true;
+        for (size_t j = 0; j < PA_MDT_BF_COUNT; j++)
+            if (c->reserved_entries[j] != 0) {
+                empty_container = false;
+                break;
+            }
+
+        if (empty_container)
+            pa_mdt_container_free(c);
+
+        cur = next;
     }
+
+    n->mdt.pa_mdt.count = 0;
+    n->mdt.pa_mdt.list = NULL;
 }

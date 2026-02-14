@@ -13,7 +13,9 @@
 #include "../mm_info.h"
 #include "containers/containers.h"
 #include "lib/align.h"
+#include "lib/stdbitfield.h"
 #include "lib/unit/mem.h"
+#include "mdt/mdt.h"
 
 typedef enum {
     KMAP_LIST,    // reserves exactly the provided v address, if not free, panics
@@ -24,8 +26,8 @@ typedef enum {
 static v_uintptr pop_fva(const vmalloc_lists l, size_t pages, p_uintptr p);
 static v_uintptr reserve_from_fva_node(fva_node** first, fva_node* cur, fva_node* prev,
                                        v_uintptr va, size_t bytes);
-static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
-                     vmalloc_cfg cfg);
+static rva_node* push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
+                          vmalloc_cfg cfg);
 
 
 static fva_node* fva_kmap_list;
@@ -58,6 +60,7 @@ static inline vmalloc_lists list_from_va(v_uintptr uva)
 void vmalloc_init()
 {
     vmalloc_init_containers();
+    vmalloc_pa_mdt_init();
 
     fva_kmap_list = get_new_fva_node();
     fva_dynamic_list = get_new_fva_node();
@@ -95,7 +98,8 @@ v_uintptr vmalloc_update_memblocks(const memblock* mblcks, size_t n)
 
         ASSERT(ptrs_are_kmapped(pv_ptr_new(mb.addr, vsign(va))));
 
-        push_rva(KMAP_LIST, mb.blocks, va, mm_kpa_to_kva_ptr(mb.tag),
+        push_rva(KMAP_LIST, mb.blocks, va,
+                 mm_is_kva((uintptr)mb.tag) ? mb.tag : mm_kpa_to_kva_ptr(mb.tag),
                  (vmalloc_cfg) {
                      .kmap =
                          {
@@ -300,10 +304,17 @@ static void push_fva(const vmalloc_lists l, v_uintptr va, size_t bytes)
 }
 
 
-static bool find_rva(const vmalloc_lists l, v_uintptr start, rva_node** node, rva_node** prev)
+static bool find_rva(v_uintptr start, rva_node** node, rva_node** prev)
 {
+    start = mm_is_kva_uintptr(start) ? vunsign(start) : start;
+
+    const vmalloc_lists l = list_from_va(start);
+
     rva_node* c = (l == KMAP_LIST) ? rva_kmap_list : rva_dynamic_list;
     rva_node* p = NULL;
+
+    if (!c)
+        return false;
 
     while (node) {
         if (c->start == start) {
@@ -328,7 +339,7 @@ static size_t pop_rva(const vmalloc_lists l, v_uintptr start, vmalloc_allocated_
 {
     rva_node *node, *prev;
 
-    bool found = find_rva(l, start, &node, &prev);
+    bool found = find_rva(start, &node, &prev);
     ASSERT(found, "vmalloc: attempted to free an unreserved virtual address");
     ASSERT(!node->mdt.info.permanent, "vmalloc: cannot free a permanent va");
 
@@ -342,14 +353,16 @@ static size_t pop_rva(const vmalloc_lists l, v_uintptr start, vmalloc_allocated_
     else
         *((l == KMAP_LIST) ? &rva_kmap_list : &rva_dynamic_list) = node->next;
 
+
+    vmalloc_pa_mdt_free(node);
     free_rva_node(node);
 
     return size;
 }
 
 
-static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
-                     vmalloc_cfg cfg)
+static rva_node* push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const char* tag,
+                          vmalloc_cfg cfg)
 {
     DEBUG_ASSERT((cfg.kmap.use_kmap && l == KMAP_LIST) ||
                  (!cfg.kmap.use_kmap && l == DYNAMIC_LIST));
@@ -389,7 +402,11 @@ static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const
                         .device_mem = cfg.device_mem,
                         .permanent = cfg.permanent,
                     },
-                .pa_mdt = NULL,
+                .pa_mdt =
+                    {
+                        .count = 0,
+                        .list = NULL,
+                    },
             },
     };
 
@@ -397,10 +414,12 @@ static void push_rva(const vmalloc_lists l, size_t pages, v_uintptr start, const
         prev->next = node;
     else
         *((l == KMAP_LIST) ? &rva_kmap_list : &rva_dynamic_list) = node;
+
+    return node;
 }
 
 
-v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg)
+v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg, vmalloc_token* t)
 {
     vmalloc_lists l = cfg.kmap.use_kmap ? KMAP_LIST : DYNAMIC_LIST;
 
@@ -420,22 +439,12 @@ v_uintptr vmalloc(size_t pages, const char* tag, vmalloc_cfg cfg)
         DEBUG_ASSERT(start >= vunsign(mm_kpa_to_kva(mm_info_mm_addr_space())));
 #endif
 
-    push_rva(l, pages, start, tag, cfg);
+    rva_node* n = push_rva(l, pages, start, tag, cfg);
 
+    if (t)
+        t->rva_ = n;
 
     return vsign(start);
-}
-
-
-size_t vfree(v_uintptr va, vmalloc_allocated_area_mdt* info)
-{
-    v_uintptr uva = vunsign(va);
-    vmalloc_lists l = list_from_va(uva);
-
-    size_t bytes = pop_rva(l, uva, info);
-    push_fva(l, uva, bytes);
-
-    return bytes;
 }
 
 
@@ -487,7 +496,7 @@ const char* vmalloc_update_tag(void* addr, const char* new_tag)
 
     v_uintptr va = vunsign((v_uintptr)addr);
 
-    bool found = find_rva(list_from_va(va), va, &node, &prev);
+    bool found = find_rva(va, &node, &prev);
     ASSERT(found, "vmalloc_update_tag: requested va not allocated");
 
     const char* old_tag = node->mdt.info.tag;
@@ -546,6 +555,142 @@ vmalloc_va_info vmalloc_get_addr_info(void* addr)
     }
 
     return (vmalloc_va_info) {.state = VMALLOC_VA_UNREGISTERED};
+}
+
+
+vmalloc_token vmalloc_get_token(void* allocation_addr)
+{
+    rva_node* n;
+    bool result = find_rva((v_uintptr)allocation_addr, &n, NULL);
+    ASSERT(result, "vmalloc_get_token: token not found");
+
+    return (vmalloc_token) {.rva_ = n};
+}
+
+#ifdef DEBUG
+static void validate_vmalloc_token(vmalloc_token t)
+{
+    DEBUG_ASSERT(t.rva_);
+    rva_node* lists[2] = {rva_kmap_list, rva_dynamic_list};
+
+    for (size_t i = 0; i < 2; i++) {
+        rva_node* cur = lists[i];
+        while (cur) {
+            if (cur == (rva_node*)t.rva_) {
+                vmalloc_container* c = (vmalloc_container*)align_down((uintptr)cur, KPAGE_ALIGN);
+                rva_node* base = &c->rva.data.nodes[0];
+
+#    define T typeof(c->rva.data.reserved_nodes[0])
+                size_t i, j, k;
+                i = (size_t)(cur - base);
+                j = i / BITFIELD_CAPACITY(T);
+                k = i % BITFIELD_CAPACITY(T);
+
+                DEBUG_ASSERT(bitfield_get(c->rva.data.reserved_nodes[j], k));
+
+                return;
+            }
+            cur = cur->next;
+        }
+    }
+    PANIC("vmalloc_push_pa: provided a token with an inexistent node address, it might have been "
+          "freed before");
+}
+
+#    undef T
+
+#else
+#    define validate_vmalloc_token(...)
+#endif
+
+
+vmalloc_allocated_area_mdt __vmalloc_token__vmalloc_get_mdt(vmalloc_token t)
+{
+    validate_vmalloc_token(t);
+
+    rva_node* rva = t.rva_;
+
+    return rva->mdt.info;
+}
+
+vmalloc_allocated_area_mdt __voidptr__vmalloc_get_mdt(void* allocation_addr)
+{
+    vmalloc_token t = vmalloc_get_token(allocation_addr);
+
+    return __vmalloc_token__vmalloc_get_mdt(t);
+}
+
+
+void vmalloc_push_pa(vmalloc_token t, size_t order, p_uintptr pa, v_uintptr va)
+{
+    validate_vmalloc_token(t);
+
+    rva_node* n = t.rva_;
+
+    vmalloc_pa_mdt_push(n, order, pa, va);
+}
+
+
+size_t vmalloc_get_pa_count(vmalloc_token t)
+{
+    validate_vmalloc_token(t);
+
+    rva_node* n = t.rva_;
+
+    return n->mdt.pa_mdt.count;
+}
+
+
+bool vmalloc_get_pa_info(vmalloc_token t, vmalloc_pa_info* buf, size_t buf_size)
+{
+    validate_vmalloc_token(t);
+
+    rva_node* n = t.rva_;
+
+    size_t count = n->mdt.pa_mdt.count;
+
+    if (buf_size < count)
+        return false;
+
+    vmalloc_pa_mdt* cur = n->mdt.pa_mdt.list;
+
+    size_t i = 0;
+
+    while (cur) {
+        if (i >= count)
+            return false;
+
+        buf[i++] = cur->info;
+
+        cur = cur->next;
+    }
+
+    return true;
+}
+
+
+size_t __vmalloc_token__vfree(vmalloc_token t, vmalloc_allocated_area_mdt* info)
+{
+    validate_vmalloc_token(t);
+
+    rva_node* rva = t.rva_;
+
+    v_uintptr va = rva->start;
+
+    vmalloc_lists l = list_from_va(va);
+
+    size_t bytes = pop_rva(l, va, info);
+    push_fva(l, va, bytes);
+
+    return bytes;
+}
+
+
+size_t __voidptr__vfree(void* va, vmalloc_allocated_area_mdt* info)
+{
+    vmalloc_token t = vmalloc_get_token(va);
+
+    return __vmalloc_token__vfree(t, info);
 }
 
 

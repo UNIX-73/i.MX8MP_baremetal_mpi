@@ -16,6 +16,6 @@ extern const size_t RESERVE_MALLOC_RESERVE_SIZE;
 
 void reserve_malloc_init();
 
-pv_ptr reserve_malloc();
+pv_ptr reserve_malloc(const char* new_tag);
 
 void reserve_malloc_fill();

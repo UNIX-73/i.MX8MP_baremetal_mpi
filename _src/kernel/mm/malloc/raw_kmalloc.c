@@ -92,7 +92,7 @@ static void* raw_kmalloc_kmap(size_t pages, const char* tag, const raw_kmalloc_c
                                       .permanent = cfg->permanent,
                                   });
 
-    v_uintptr va = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, page.pa));
+    v_uintptr va = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, page.pa), NULL);
 
     DEBUG_ASSERT(ptrs_are_kmapped(pv_ptr_new(page.pa, va)));
 
@@ -109,8 +109,8 @@ static void* raw_kmalloc_dynamic(size_t pages, const char* tag, const raw_kmallo
     DEBUG_ASSERT(!cfg->kmap);
     ASSERT(cfg->assign_pa, "vmalloc: TODO: NOT IMPLEMENTED YET");
 
-
-    v_uintptr start = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, 0));
+    vmalloc_token vtoken;
+    v_uintptr start = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, 0), &vtoken);
 
     v_uintptr v = start;
     size_t rem = pages;
@@ -119,12 +119,23 @@ static void* raw_kmalloc_dynamic(size_t pages, const char* tag, const raw_kmallo
         size_t o = log2_floor(rem);
         size_t order_bytes = power_of2(o) * KPAGE_SIZE;
 
+        /*
+            get phys page
+        */
         mm_page page = page_malloc(o, (mm_page_data) {
                                           .tag = tag,
                                           .device_mem = cfg->device_mem,
                                           .permanent = cfg->permanent,
                                       });
 
+        /*
+            save in vmalloc the order and corresponding va for that pa
+        */
+        vmalloc_push_pa(vtoken, o, page.pa, v);
+
+        /*
+            mmu map the pages
+        */
         const mmu_pg_cfg* mmu_cfg = cfg->device_mem ? &STD_MMU_DEVICE_CFG : &STD_MMU_KMEM_CFG;
         bool mmu_res = mmu_map(&mm_mmu_h, v, page.pa, order_bytes, *mmu_cfg, NULL);
         ASSERT(mmu_res);
@@ -180,68 +191,46 @@ void* raw_kmalloc(size_t pages, const char* tag, const raw_kmalloc_cfg* cfg)
 }
 
 
-typedef struct {
-    v_uintptr kfree_ptr;
-    size_t kfree_bytes;
-} kfree_peek_args;
-
-static bool mmu_peek_dynamic_kfree_cb(mmu_peek_data data, void* args)
-{
-    kfree_peek_args* a = args;
-
-    DEBUG_ASSERT(a);
-
-    v_uintptr start = a->kfree_ptr;
-    size_t bytes = a->kfree_bytes;
-    v_uintptr end = start + bytes;
-
-    if (data.valid) {
-        if (start <= data.va && data.va <= end) {
-            page_free((mm_page) {
-                .pa = data.pa,
-                .order = data.bytes / KPAGE_SIZE,
-            });
-        }
-    }
-
-    return true;
-}
-
 void raw_kfree(void* ptr)
 {
-    v_uintptr va = (v_uintptr)ptr;
+    vmalloc_token vtoken;
     vmalloc_allocated_area_mdt vinfo;
     bool result;
 
     corelocked(&lock)
     {
-        size_t bytes = vfree(va, &vinfo);
+        vtoken = vmalloc_get_token(ptr);
+        vinfo = vmalloc_get_mdt(vtoken);
 
         if (vinfo.kmapped) {
+            size_t bytes = vfree(vtoken, NULL);
+
             DEBUG_ASSERT(is_pow2(bytes));
 
-            page_free((mm_page) {
-                .pa = mm_kva_to_kpa(va),
-                .order = log2_floor(bytes / KPAGE_SIZE),
-            });
+            page_free(mm_kva_to_kpa((v_uintptr)ptr));
 
 
             if (vinfo.pa_assigned) {
-                result = mmu_unmap(&mm_mmu_h, va, bytes, NULL);
+                result = mmu_unmap(&mm_mmu_h, (v_uintptr)ptr, bytes, NULL);
                 ASSERT(result);
             }
         }
         //  dynamic
         else {
-            kfree_peek_args args = (kfree_peek_args) {
-                .kfree_ptr = va,
-                .kfree_bytes = bytes,
-            };
+            const size_t N = vmalloc_get_pa_count(vtoken);
 
-            result = mmu_peek(&mm_mmu_h, va, bytes, mmu_peek_dynamic_kfree_cb, &args);
+            vmalloc_pa_info pages[N];
+
+            result = vmalloc_get_pa_info(vtoken, pages, N);
             ASSERT(result);
 
-            result = mmu_unmap(&mm_mmu_h, va, bytes, NULL);
+            for (size_t i = 0; i < N; i++)
+                page_free(pages[i].pa);
+
+
+            size_t bytes = vfree(vtoken, NULL);
+
+            result = mmu_unmap(&mm_mmu_h, (v_uintptr)ptr, bytes, NULL);
             ASSERT(result);
         }
     }

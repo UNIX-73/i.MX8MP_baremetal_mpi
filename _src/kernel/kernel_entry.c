@@ -34,62 +34,38 @@ _Noreturn void kernel_entry()
     __attribute((unused)) mm_ksections x = MM_KSECTIONS;
 
 
-    void* test[100];
+    void* test[200];
 
     vmalloc_debug_free();
 
 
-    for (size_t i = 0; i < 100; i++) {
-        size_t j = 8;
+    for (size_t i = 0; i < 200; i++) {
+        if (i < 100) {
+            raw_kmalloc_cfg c = RAW_KMALLOC_KMAP_CFG;
+            c.init_zeroed = true;
 
-        term_printf("i=%d j=%d\n\r", i, j);
+            test[i] = raw_kmalloc(8, "test", &c);
+        }
+        else {
+            raw_kmalloc_cfg c = RAW_KMALLOC_DYNAMIC_CFG;
+            c.init_zeroed = true;
 
-        raw_kmalloc_cfg c = RAW_KMALLOC_KMAP_CFG;
-        c.init_zeroed = true;
-
-        test[i] = raw_kmalloc(j, "test", &c);
-
-        vmalloc_va_info info = vmalloc_get_addr_info(test[i]);
-
-        ASSERT(info.state == VMALLOC_VA_INFO_RESERVED);
-        ASSERT(info.state_info.reserved.reserved_start == (v_uintptr)test[i]);
-        ASSERT(info.state_info.reserved.reserved_size == j * KPAGE_SIZE);
+            term_printf("%d\n\r", i);
+            test[i] = raw_kmalloc(8 + i, "test", &c);
+        }
     }
-
-
-    page_allocator_debug();
 
     __attribute((unused)) vmalloc_va_info i = vmalloc_get_addr_info((void*)(~(uint64)0 - 0x4000));
 
-    vmalloc_debug_free();
-    vmalloc_debug_reserved();
-
-
     term_prints("->>>>>>>>>\n\r");
 
-    for (size_t i = 0; i < 100; i++) {
-        if (i % 2 == 0)
-            continue;
-
+    for (size_t i = 0; i < 200; i++) {
         raw_kfree(test[i]);
     }
 
     vmalloc_debug_free();
     vmalloc_debug_reserved();
 
-    for (size_t i = 0; i < 100; i++) {
-        if (i % 2 != 0)
-            continue;
-
-        raw_kfree(test[i]);
-    }
-
-    term_prints("->>>>>>>>>\n\r");
-
-    vmalloc_debug_free();
-    vmalloc_debug_reserved();
-
-    term_prints("end\n\r");
 
     loop asm volatile("wfi");
 }

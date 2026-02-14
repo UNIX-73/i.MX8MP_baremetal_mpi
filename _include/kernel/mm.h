@@ -38,6 +38,19 @@ v_uintptr mm_kpa_to_kva(p_uintptr pa);
 #    define mm_kpa_to_kva_ptr(pa) (void*)mm_kpa_to_kva((p_uintptr)(pa))
 
 
+static inline bool mm_is_kva_ptr(void* a)
+{
+    return (uintptr)a >= KERNEL_BASE;
+}
+
+static inline bool mm_is_kva_uintptr(uintptr a)
+{
+    return a >= KERNEL_BASE;
+}
+
+#    define mm_is_kva(a) _Generic((a), void*: mm_is_kva_ptr, uintptr: mm_is_kva_uintptr)(a)
+
+
 static inline bool ptrs_are_kmapped(pv_ptr pv)
 {
     return mm_kpa_to_kva(pv.pa) == pv.va;

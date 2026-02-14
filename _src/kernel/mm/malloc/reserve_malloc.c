@@ -1,12 +1,16 @@
 #include "reserve_malloc.h"
 
+#include <kernel/mm.h>
 #include <kernel/panic.h>
 #include <lib/mem.h>
 #include <lib/stdbitfield.h>
+#include <lib/string.h>
 
+#include "../virt/vmalloc.h"
 #include "early_kalloc.h"
-#include "kernel/mm.h"
-#include "lib/stdbool.h"
+
+
+static const char* RESERVE_MALLOC_TAG = "reserved page";
 
 
 #define RESERVE_MALLOC_SIZE BITFIELD_CAPACITY(bitfield32)
@@ -19,14 +23,14 @@ static bitfield32 reserved_pages;
 
 void reserve_malloc_init()
 {
-    ASSERT(RESERVE_MALLOC_SIZE <= bitfield_bit_size(reserved_pages));
+    ASSERT(RESERVE_MALLOC_SIZE <= BITFIELD_CAPACITY(reserved_pages));
 
     reserved_pages = 0;
 
     for (size_t i = 0; i < RESERVE_MALLOC_SIZE; i++) {
         ASSERT(!bitfield_get(reserved_pages, i));
 
-        p_uintptr pa = early_kalloc(KPAGE_SIZE, "reserve_allocator_page", false, false);
+        p_uintptr pa = early_kalloc(KPAGE_SIZE, RESERVE_MALLOC_TAG, false, false);
         v_uintptr va = mm_kpa_to_kva(pa); // works because all the memblocks are assured to be
                                           // mapped with the kernel physmap offset
 
@@ -45,7 +49,7 @@ void reserve_malloc_init()
 }
 
 
-pv_ptr reserve_malloc()
+pv_ptr reserve_malloc(const char* new_tag)
 {
     for (size_t i = 0; i < RESERVE_MALLOC_SIZE; i++) {
         if (bitfield_get(reserved_pages, i)) {
@@ -53,6 +57,11 @@ pv_ptr reserve_malloc()
             bitfield_clear(reserved_pages, i);
 
             DEBUG_ASSERT(ptrs_are_kmapped(pmap));
+
+            if (new_tag) {
+                const char* old_tag = vmalloc_update_tag((void*)pmap.va, new_tag);
+                DEBUG_ASSERT(strcmp(old_tag, RESERVE_MALLOC_TAG));
+            }
 
             return pmap;
         }
@@ -64,31 +73,36 @@ pv_ptr reserve_malloc()
 
 void reserve_malloc_fill()
 {
-    if (reserved_pages == (typeof(reserved_pages))((1ULL << RESERVE_MALLOC_SIZE) - 1))
-        return;
+#define RESERVE_IS_FULL() \
+    (reserved_pages == (typeof(reserved_pages))((1ULL << RESERVE_MALLOC_SIZE) - 1))
 
-    for (size_t i = 0; i < RESERVE_MALLOC_SIZE; i++) {
-        if (bitfield_get(reserved_pages, i))
-            break;
+    raw_kmalloc_cfg cfg = RAW_KMALLOC_KMAP_CFG;
+    cfg.fill_reserve = false;
+    cfg.kmap = true;
+    cfg.assign_pa = true;
 
+    while (!RESERVE_IS_FULL()) {
+        for (size_t i = 0; i < RESERVE_MALLOC_SIZE; i++) {
+            if (RESERVE_IS_FULL())
+                goto end;
 
-        raw_kmalloc_cfg cfg = RAW_KMALLOC_KMAP_CFG;
-        cfg.fill_reserve = false;
-        cfg.kmap = true;
-        cfg.assign_pa = true;
+            if (bitfield_get(reserved_pages, i))
+                continue;
 
+            v_uintptr va = (v_uintptr)raw_kmalloc(
+                1, RESERVE_MALLOC_TAG, &cfg); // it can actually get a new idx from the reserve,
+                                              // thats why the for loop is inside a while
+            p_uintptr pa = mm_kva_to_kpa(va);
+            pv_ptr pv = pv_ptr_new(pa, va);
 
-        v_uintptr va = (v_uintptr)raw_kmalloc(1, "reserve_malloc page", &cfg);
-        p_uintptr pa = mm_kva_to_kpa(va);
+            
+            DEBUG_ASSERT(pv.pa != 0 && ptrs_are_kmapped(pv));
+            reserved_addr[i] = pv;
 
-        pv_ptr pv = pv_ptr_new(pa, va);
-
-
-        DEBUG_ASSERT(pv.pa != 0 && ptrs_are_kmapped(pv));
-        reserved_addr[i] = pv;
-
-        bitfield_set_high(reserved_pages, i);
+            bitfield_set_high(reserved_pages, i);
+        }
     }
 
+end:
     DEBUG_ASSERT(reserved_pages == (typeof(reserved_pages))((1ULL << RESERVE_MALLOC_SIZE) - 1));
 }

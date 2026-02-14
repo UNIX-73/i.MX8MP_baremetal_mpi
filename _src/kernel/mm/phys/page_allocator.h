@@ -37,7 +37,7 @@ size_t page_allocator_bytes_to_order(size_t bytes);
 
 mm_page page_malloc(size_t order, mm_page_data p);
 
-void page_free(mm_page p);
+void page_free(p_uintptr pa);
 
 /// should not be prioritized over page_free(), the main purpose is to clean non permanent early
 /// stage allocations

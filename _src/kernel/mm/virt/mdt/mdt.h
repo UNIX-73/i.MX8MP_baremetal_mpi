@@ -12,9 +12,7 @@ typedef bitfield64 mdt_bf;
 
 typedef struct vmalloc_pa_mdt {
     struct vmalloc_pa_mdt* next;
-    size_t order;
-    p_uintptr pa;
-    v_uintptr va;
+    vmalloc_pa_info info;
 } vmalloc_pa_mdt;
 
 
@@ -50,4 +48,4 @@ _Static_assert(BITFIELD_CAPACITY(mdt_bf) * PA_MDT_BF_COUNT >= PA_MDT_CONTAINER_N
 void vmalloc_pa_mdt_init();
 
 void vmalloc_pa_mdt_push(rva_node* n, size_t o, p_uintptr pa, v_uintptr va);
-void vmalloc_pa_mdt_pop(rva_node* n);
+void vmalloc_pa_mdt_free(rva_node* n);
