@@ -55,7 +55,7 @@ static inline v_uintptr mm_kpa_to_kva(p_uintptr pa)
 #    define mm_kpa_to_kva_ptr(pa) (void*)mm_kpa_to_kva((p_uintptr)(pa))
 
 
-static inline bool mm_is_kva_ptr(void* a)
+static inline bool mm_is_kva_ptr(const void* a)
 {
     return (uintptr)a >= KERNEL_BASE;
 }

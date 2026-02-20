@@ -69,11 +69,8 @@ void mm_early_init()
     early_kalloc_get_memregs(&mregs, &n);
 
 
-    pv_ptr last_free_region_start = {
-        .pa = page_allocator_update_memregs(mregs, n),
-        .va = vmalloc_update_memregs(mregs, n),
-    };
-    ASSERT(ptrs_are_kmapped(last_free_region_start));
+    page_allocator_update_memregs(mregs, n);
+    vmalloc_update_memregs(mregs, n);
 
 
     mmu_reconfig_allocators(&mm_mmu_h, mm_as_kva_ptr((void*)mmu_allocator_fn),

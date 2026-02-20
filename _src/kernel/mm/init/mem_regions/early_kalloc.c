@@ -284,6 +284,11 @@ void early_kalloc_get_memregs(early_memreg** mregs, size_t* mreg_struct_count)
 
     *mregs = memregs_buf;
     *mreg_struct_count = memreg_count;
+
+
+    // make all tags valid kernel virtual addresses
+    for (size_t i = 0; i < memreg_count; i++)
+        memregs_buf[i].tag = mm_as_kva_ptr(memregs_buf[i].tag);
 }
 
 

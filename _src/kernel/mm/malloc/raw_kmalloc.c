@@ -14,7 +14,6 @@
 #include "../phys/page.h"
 #include "../phys/page_allocator.h"
 #include "../virt/vmalloc.h"
-#include "kernel/io/term.h"
 #include "reserve_malloc.h"
 
 
@@ -87,18 +86,18 @@ static void* raw_kmalloc_kmap(size_t pages, const char* tag, const raw_kmalloc_c
 
     size_t o = log2_floor(pages);
 
-    mm_page page = page_malloc(o, (mm_page_data) {
+    p_uintptr pa = page_malloc(o, (mm_page_data) {
                                       .tag = tag,
                                       .device_mem = cfg->device_mem,
                                       .permanent = cfg->permanent,
                                   });
 
-    v_uintptr va = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, page.pa), NULL);
+    v_uintptr va = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, pa), NULL);
 
-    DEBUG_ASSERT(ptrs_are_kmapped(pv_ptr_new(page.pa, va)));
+    DEBUG_ASSERT(ptrs_are_kmapped(pv_ptr_new(pa, va)));
 
     const mmu_pg_cfg* mmu_cfg = cfg->device_mem ? &STD_MMU_DEVICE_CFG : &STD_MMU_KMEM_CFG;
-    bool mmu_res = mmu_map(&mm_mmu_h, va, page.pa, pages * KPAGE_SIZE, *mmu_cfg, NULL);
+    bool mmu_res = mmu_map(&mm_mmu_h, va, pa, pages * KPAGE_SIZE, *mmu_cfg, NULL);
     ASSERT(mmu_res);
 
     return (void*)va;
@@ -113,7 +112,7 @@ static void* raw_kmalloc_dynamic(size_t pages, const char* tag, const raw_kmallo
     vmalloc_token vtoken;
     v_uintptr start = vmalloc(pages, tag, vmalloc_cfg_from_raw_kmalloc_cfg(cfg, 0), &vtoken);
 
-    v_uintptr v = start;
+    v_uintptr va = start;
     size_t rem = pages;
 
     while (rem > 0) {
@@ -123,7 +122,7 @@ static void* raw_kmalloc_dynamic(size_t pages, const char* tag, const raw_kmallo
         /*
             get phys page
         */
-        mm_page page = page_malloc(o, (mm_page_data) {
+        p_uintptr pa = page_malloc(o, (mm_page_data) {
                                           .tag = tag,
                                           .device_mem = cfg->device_mem,
                                           .permanent = cfg->permanent,
@@ -132,21 +131,21 @@ static void* raw_kmalloc_dynamic(size_t pages, const char* tag, const raw_kmallo
         /*
             save in vmalloc the order and corresponding va for that pa
         */
-        vmalloc_push_pa(vtoken, o, page.pa, v);
+        vmalloc_push_pa(vtoken, o, pa, va);
 
         /*
             mmu map the pages
         */
         const mmu_pg_cfg* mmu_cfg = cfg->device_mem ? &STD_MMU_DEVICE_CFG : &STD_MMU_KMEM_CFG;
-        bool mmu_res = mmu_map(&mm_mmu_h, v, page.pa, order_bytes, *mmu_cfg, NULL);
+        bool mmu_res = mmu_map(&mm_mmu_h, va, pa, order_bytes, *mmu_cfg, NULL);
         ASSERT(mmu_res);
 
 
-        v += order_bytes;
+        va += order_bytes;
         rem -= power_of2(o);
     }
 
-    DEBUG_ASSERT(start + (pages * KPAGE_SIZE) == v);
+    DEBUG_ASSERT(start + (pages * KPAGE_SIZE) == va);
 
     return (void*)start;
 }
